@@ -59,16 +59,14 @@ describe('diff algorithm', () => {
     expect(patch?.props?.removed).toEqual(['className']);
   });
 
-  it('diffs children and preserves keyed identity by triggering replace', () => {
+  it('diffs children and preserves keyed identity', () => {
     const oldVNode = h('ul', null, h('li', { key: '1' }, '1'), h('li', { key: '2' }, '2'));
     const newVNode = h('ul', null, h('li', { key: '1' }, '1'), h('li', { key: '3' }, '3'), h('li', { key: '2' }, '2'));
     const patchObj = diff(oldVNode, newVNode);
 
-    // In our current implementation, at index 1: old was key '2', new is key '3'.
-    // They have different keys, so it's a REPLACE.
-    expect(patchObj?.children![1].type).toBe(PatchType.REPLACE);
-    // At index 2: old is undefined, new is key '2'.
-    // It's a CREATE.
-    expect(patchObj?.children![2].type).toBe(PatchType.CREATE);
+    // index 1: new key '3' is not in old. Expect CREATE.
+    expect(patchObj?.children![1].type).toBe(PatchType.CREATE);
+    // index 2: new key '2' was at old index 1. Expect UPDATE_PROPS (matching key).
+    expect(patchObj?.children![2].type).toBe(PatchType.UPDATE_PROPS);
   });
 });

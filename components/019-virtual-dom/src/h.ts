@@ -15,7 +15,7 @@ export function h(
   props: Props | null = null,
   ...children: VNodeChild[]
 ): VNode {
-  const normalizedProps: Props = props || {};
+  const normalizedProps: Props = props ? { ...props } : {};
   const key = normalizedProps.key;
   if (key !== undefined) {
     delete normalizedProps.key;

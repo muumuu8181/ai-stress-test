@@ -1,15 +1,15 @@
-import { VNode, Patch, PatchType, Fragment } from './types';
+import { VNode, Patch, PatchType, Fragment, Props } from './types';
 import { updateEvents } from './events';
 import { renderComponent } from './component';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /**
- * Creates a real DOM node from a VNode.
+ * Creates real DOM nodes from a VNode.
  *
  * @param vnode - The Virtual DOM Node.
  * @param isSVG - Whether the current context is SVG.
- * @returns A real DOM Node.
+ * @returns A real DOM Node (or array of nodes for Fragments).
  */
 export function createElement(vnode: VNode, isSVG = false): Node {
   if (vnode.type === 'TEXT_NODE') {
@@ -68,11 +68,12 @@ export function applyProp(el: HTMLElement | SVGElement, key: string, value: any,
     for (const s in value) {
       (style as any)[s] = value[s];
     }
-  } else if (key === 'className') {
+  } else if (key === 'className' || key === 'class') {
+    const classVal = value || '';
     if (isSVG) {
-      el.setAttribute('class', value || '');
+      el.setAttribute('class', classVal);
     } else {
-      (el as HTMLElement).className = value || '';
+      (el as HTMLElement).className = classVal;
     }
   } else if (value === false || value === null || value === undefined) {
     el.removeAttribute(key);
@@ -133,17 +134,23 @@ export function patch(parent: Node, patchObj: Patch | null, index = 0): void {
     case PatchType.UPDATE_PROPS: {
       const el = child as HTMLElement;
       if (!el) return;
-      const { props, children } = patchObj;
+      const { props, children, oldVNode } = patchObj;
       const isSVG = el instanceof SVGElement;
 
       if (props) {
         props.removed.forEach(key => {
-          el.removeAttribute(key);
+          if (key === 'className' || key === 'class') {
+            if (isSVG) el.removeAttribute('class');
+            else el.className = '';
+          } else {
+            el.removeAttribute(key);
+          }
           if (key.startsWith('on')) updateEvents(el, key.toLowerCase().slice(2), null, null);
         });
         const allUpdates = { ...props.added, ...props.updated };
         for (const [key, value] of Object.entries(allUpdates)) {
-          applyProp(el, key, value, null, isSVG);
+          const oldValue = oldVNode ? oldVNode.props[key] : null;
+          applyProp(el, key, value, oldValue, isSVG);
         }
       }
 

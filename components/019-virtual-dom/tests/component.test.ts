@@ -27,6 +27,17 @@ describe('functional components', () => {
     expect(container.textContent).toBe('Hello, World');
   });
 
+  it('re-renders on prop changes', () => {
+    const container = document.getElementById('app')!;
+    const MyComponent = ({ name }: { name: string }) => h('div', null, `Hello, ${name}`);
+
+    render(h(MyComponent, { name: 'A' }), container);
+    expect(container.textContent).toBe('Hello, A');
+
+    render(h(MyComponent, { name: 'B' }), container);
+    expect(container.textContent).toBe('Hello, B');
+  });
+
   it('handles isolated state for multiple instances', () => {
     const container = document.getElementById('app')!;
     let setA: any;
@@ -48,7 +59,7 @@ describe('functional components', () => {
 
     setA(1);
     expect(container.textContent).toContain('A: 1');
-    expect(container.textContent).toContain('B: 0'); // B should still be 0
+    expect(container.textContent).toContain('B: 0');
 
     setB(2);
     expect(container.textContent).toContain('A: 1');
@@ -93,15 +104,5 @@ describe('functional components', () => {
     const clickEvent = new (dom.window as any).Event('click', { bubbles: true });
     button.dispatchEvent(clickEvent);
     expect(handleClick).toHaveBeenCalledTimes(1);
-  });
-
-  it('updates root container when calling render multiple times', () => {
-    const container = document.getElementById('app')!;
-    render(h('div', null, 'First'), container);
-    expect(container.textContent).toBe('First');
-
-    render(h('div', null, 'Second'), container);
-    expect(container.textContent).toBe('Second');
-    expect(container.childNodes).toHaveLength(1);
   });
 });

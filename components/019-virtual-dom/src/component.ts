@@ -12,6 +12,8 @@ interface ComponentState {
   renderedVNode?: VNode;
 }
 
+const componentStateStore = new Map<any, ComponentState>();
+
 let currentComponentState: ComponentState | null = null;
 let currentHookIndex = 0;
 
@@ -45,8 +47,6 @@ export function useState<T>(initialState: T): [T, (newState: T | ((prev: T) => T
  * Renders a functional component and returns its DOM node.
  */
 export function renderComponent(vnode: VNode, isSVG = false): Node {
-  // To ensure isolated state per instance, we store the state on the VNode's _state property.
-  // This state must be carried over when the VNode is updated (in diff/patch).
   let state: ComponentState = (vnode as any)._state;
   if (!state) {
     state = {
@@ -98,7 +98,6 @@ function updateComponent(state: ComponentState): void {
       const index = Array.prototype.indexOf.call(parent.childNodes, el);
       if (index !== -1) {
         patch(parent, p, index);
-        // Ensure the new element is tracked if it was replaced
         state.vnode.el = parent.childNodes[index];
       }
     }

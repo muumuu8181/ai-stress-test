@@ -18,18 +18,34 @@ export function diff(oldVNode: VNode | undefined, newVNode: VNode | undefined): 
     return null;
   }
 
+  // Handle functional component type updates correctly
+  if (typeof oldVNode.type === 'function' && typeof newVNode.type === 'function') {
+    if (oldVNode.type !== newVNode.type || oldVNode.key !== newVNode.key) {
+      return { type: PatchType.REPLACE, newVNode, oldVNode };
+    }
+
+    // Carry over component state if present
+    if ((oldVNode as any)._state) {
+      (newVNode as any)._state = (oldVNode as any)._state;
+      (newVNode as any)._state.vnode = newVNode;
+    }
+
+    const propsDiff = diffProps(oldVNode.props, newVNode.props);
+    if (propsDiff) {
+       // Functional components should re-render on prop changes.
+       // We can return a special REPLACE patch that preserves state, or just REPLACE for now.
+       return { type: PatchType.REPLACE, newVNode, oldVNode };
+    }
+    newVNode.el = oldVNode.el;
+    return null;
+  }
+
   if (oldVNode.type !== newVNode.type || oldVNode.key !== newVNode.key) {
     return { type: PatchType.REPLACE, newVNode, oldVNode };
   }
 
   // Preserve DOM reference
   newVNode.el = oldVNode.el;
-
-  // Carry over component state if present
-  if ((oldVNode as any)._state) {
-    (newVNode as any)._state = (oldVNode as any)._state;
-    (newVNode as any)._state.vnode = newVNode; // Update to latest VNode
-  }
 
   if (oldVNode.type === 'TEXT_NODE' && newVNode.type === 'TEXT_NODE') {
     if (oldVNode.props.nodeValue !== newVNode.props.nodeValue) {
@@ -45,7 +61,8 @@ export function diff(oldVNode: VNode | undefined, newVNode: VNode | undefined): 
     return {
       type: PatchType.UPDATE_PROPS,
       props: propsDiff || { added: {}, removed: [], updated: {} },
-      children: childrenDiff
+      children: childrenDiff,
+      oldVNode
     };
   }
 
@@ -81,14 +98,33 @@ function diffProps(oldProps: Props, newProps: Props) {
 function diffChildren(oldChildren: VNode[], newChildren: VNode[]): (Patch | null)[] {
   const patches: (Patch | null)[] = [];
 
-  const maxLength = Math.max(oldChildren.length, newChildren.length);
-  for (let i = 0; i < maxLength; i++) {
-    const oldChild = oldChildren[i];
-    const newChild = newChildren[i];
+  const oldKeyMap = new Map<string | number, { vnode: VNode, index: number }>();
+  oldChildren.forEach((child, i) => {
+    if (child.key !== undefined) oldKeyMap.set(child.key, { vnode: child, index: i });
+  });
 
-    const patch = diff(oldChild, newChild);
-    if (patch) {
-      patches[i] = patch;
+  const maxLength = Math.max(oldChildren.length, newChildren.length);
+  const usedOldIndices = new Set<number>();
+
+  for (let i = 0; i < maxLength; i++) {
+    const newChild = newChildren[i];
+    const oldChildAtIdx = oldChildren[i];
+
+    if (newChild && newChild.key !== undefined) {
+      const matchedOld = oldKeyMap.get(newChild.key);
+      if (matchedOld) {
+        patches[i] = diff(matchedOld.vnode, newChild);
+        usedOldIndices.add(matchedOld.index);
+      } else {
+        patches[i] = diff(undefined, newChild);
+      }
+    } else {
+      if (oldChildAtIdx && oldChildAtIdx.key === undefined && !usedOldIndices.has(i)) {
+         patches[i] = diff(oldChildAtIdx, newChild);
+         usedOldIndices.add(i);
+      } else {
+         patches[i] = diff(undefined, newChild);
+      }
     }
   }
 
