@@ -47,9 +47,11 @@ class UndoManager:
         if self.current_node != self.root and not self.current_node.children:
             # Merging is only allowed if there are no redo branches from the current node
             if self.current_node.command.can_merge_with(command):
+                # We execute the new command first. If it fails, history is untouched.
+                command.execute()
+                # If execution succeeds, we merge the commands.
                 merged_command = self.current_node.command.merge_with(command)
                 self.current_node.command = merged_command
-                command.execute()
                 return
 
         command.execute()
