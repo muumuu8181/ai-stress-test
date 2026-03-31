@@ -11,7 +11,6 @@ from .handshake import (
 )
 from .frame import Frame, FrameError, IncompleteFrameError, Opcode, decode_frame, encode_frame
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class WebSocketConnection:
@@ -20,6 +19,8 @@ class WebSocketConnection:
         self.reader = reader
         self.writer = writer
         self.closed = False
+        self._frag_buffer = bytearray()
+        self._frag_opcode = None
 
     async def send(self, payload: Union[str, bytes]):
         """Sends a message to the client."""
@@ -64,8 +65,6 @@ class WebSocketServer:
         self.on_connect = on_connect
         self.on_disconnect = on_disconnect
         self.connections: Set[WebSocketConnection] = set()
-        self._frag_buffer = bytearray()
-        self._frag_opcode = None
 
     async def _handle_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         """Internal handler for new TCP connections."""
@@ -167,23 +166,26 @@ class WebSocketServer:
         elif frame.opcode == Opcode.PONG:
             pass  # Received pong
         elif frame.opcode in (Opcode.TEXT, Opcode.BINARY):
+            if conn._frag_opcode is not None:
+                raise FrameError("Received new data frame while a fragmented message is in progress")
+
             if not frame.fin:
-                self._frag_buffer.extend(frame.payload.encode("utf-8") if isinstance(frame.payload, str) else frame.payload)
-                self._frag_opcode = frame.opcode
+                conn._frag_buffer.extend(frame.payload.encode("utf-8") if isinstance(frame.payload, str) else frame.payload)
+                conn._frag_opcode = frame.opcode
             else:
                 if self.handler:
                     res = self.handler(conn, frame.payload)
                     if asyncio.iscoroutine(res):
                         await res
         elif frame.opcode == Opcode.CONTINUATION:
-            if self._frag_opcode is None:
+            if conn._frag_opcode is None:
                 raise FrameError("Received continuation frame without preceding fragment")
 
-            self._frag_buffer.extend(frame.payload.encode("utf-8") if isinstance(frame.payload, str) else frame.payload)
+            conn._frag_buffer.extend(frame.payload.encode("utf-8") if isinstance(frame.payload, str) else frame.payload)
 
             if frame.fin:
-                full_payload = bytes(self._frag_buffer)
-                if self._frag_opcode == Opcode.TEXT:
+                full_payload = bytes(conn._frag_buffer)
+                if conn._frag_opcode == Opcode.TEXT:
                     try:
                         full_payload = full_payload.decode("utf-8")
                     except UnicodeDecodeError:
@@ -194,8 +196,8 @@ class WebSocketServer:
                     if asyncio.iscoroutine(res):
                         await res
 
-                self._frag_buffer.clear()
-                self._frag_opcode = None
+                conn._frag_buffer.clear()
+                conn._frag_opcode = None
 
     async def start(self, host: str, port: int):
         """Starts the WebSocket server."""
