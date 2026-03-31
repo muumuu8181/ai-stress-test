@@ -40,7 +40,6 @@ export enum PatchType {
   REMOVE = 'REMOVE',
   REPLACE = 'REPLACE',
   UPDATE_PROPS = 'UPDATE_PROPS',
-  REORDER_CHILDREN = 'REORDER_CHILDREN',
   TEXT_UPDATE = 'TEXT_UPDATE'
 }
 
@@ -54,18 +53,8 @@ export interface Patch {
     removed: string[];
     updated: Props;
   };
-  children?: Patch[];
+  children?: (Patch | null)[];
   newVNode?: VNode;
   oldVNode?: VNode;
   text?: string;
-  moves?: Move[];
-}
-
-/**
- * Represents a child movement in keyed list reconciliation.
- */
-export interface Move {
-  type: 'INSERT' | 'REMOVE';
-  index: number;
-  item?: VNode;
 }

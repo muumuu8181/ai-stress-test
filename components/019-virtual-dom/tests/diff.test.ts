@@ -59,7 +59,7 @@ describe('diff algorithm', () => {
     expect(patch?.props?.removed).toEqual(['className']);
   });
 
-  it('diffs children and preserves keyed identity', () => {
+  it('diffs children and preserves keyed identity by triggering replace', () => {
     const oldVNode = h('ul', null, h('li', { key: '1' }, '1'), h('li', { key: '2' }, '2'));
     const newVNode = h('ul', null, h('li', { key: '1' }, '1'), h('li', { key: '3' }, '3'), h('li', { key: '2' }, '2'));
     const patchObj = diff(oldVNode, newVNode);

@@ -1,4 +1,4 @@
-import { VNode, Patch, PatchType, Props, Fragment } from './types';
+import { VNode, Patch, PatchType, Props } from './types';
 
 /**
  * Calculates the difference between two VNodes and returns a patch.
@@ -78,14 +78,15 @@ function diffProps(oldProps: Props, newProps: Props) {
   return { added, removed, updated };
 }
 
-function diffChildren(oldChildren: VNode[], newChildren: VNode[]): Patch[] {
-  const patches: Patch[] = [];
+function diffChildren(oldChildren: VNode[], newChildren: VNode[]): (Patch | null)[] {
+  const patches: (Patch | null)[] = [];
 
-  // Basic implementation to support keyed reconciliation by using CREATE/REMOVE for mismatches
-  // Real reordering is complex, but this ensures keyed nodes are handled per key.
   const maxLength = Math.max(oldChildren.length, newChildren.length);
   for (let i = 0; i < maxLength; i++) {
-    const patch = diff(oldChildren[i], newChildren[i]);
+    const oldChild = oldChildren[i];
+    const newChild = newChildren[i];
+
+    const patch = diff(oldChild, newChild);
     if (patch) {
       patches[i] = patch;
     }
