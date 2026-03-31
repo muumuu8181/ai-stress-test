@@ -131,16 +131,18 @@ export class MyPromise<T> {
   finally(onFinally?: (() => void) | undefined | null): MyPromise<T> {
     return this.then(
       (value) => {
-        if (typeof onFinally === 'function') {
-          onFinally();
+        if (typeof onFinally !== 'function') {
+          return value;
         }
-        return value;
+        return MyPromise.resolve(onFinally()).then(() => value);
       },
       (reason) => {
-        if (typeof onFinally === 'function') {
-          onFinally();
+        if (typeof onFinally !== 'function') {
+          throw reason;
         }
-        throw reason;
+        return MyPromise.resolve(onFinally()).then(() => {
+          throw reason;
+        });
       }
     );
   }
@@ -259,9 +261,10 @@ export class MyPromise<T> {
       const errors: any[] = [];
       let rejectedCount = 0;
       const arrayValues = Array.from(values);
+      const AggregateErrorCtor = (globalThis as any).AggregateError || MyAggregateError;
 
       if (arrayValues.length === 0) {
-        reject(new MyAggregateError([], 'All promises were rejected'));
+        reject(new AggregateErrorCtor([], 'All promises were rejected'));
         return;
       }
 
@@ -274,7 +277,6 @@ export class MyPromise<T> {
             errors[i] = reason;
             rejectedCount++;
             if (rejectedCount === arrayValues.length) {
-              const AggregateErrorCtor = (globalThis as any).AggregateError || MyAggregateError;
               reject(new AggregateErrorCtor(errors, 'All promises were rejected'));
             }
           }

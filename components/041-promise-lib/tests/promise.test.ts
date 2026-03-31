@@ -65,6 +65,34 @@ describe('MyPromise Core and Instance Methods', () => {
     expect(result).toBe('err');
     expect(onFinally).toHaveBeenCalled();
   });
+
+  it('finally: should await returned promise from onFinally (resolve)', async () => {
+    let resolved = false;
+    const p = MyPromise.resolve('orig').finally(() => {
+        return new MyPromise(res => setTimeout(() => {
+            resolved = true;
+            res('done');
+        }, 50));
+    });
+
+    expect(resolved).toBe(false);
+    const val = await p;
+    expect(resolved).toBe(true);
+    expect(val).toBe('orig');
+  });
+
+  it('finally: should await returned promise from onFinally and reject if it fails', async () => {
+    const p = MyPromise.resolve('orig').finally(() => {
+        return MyPromise.reject('finally-fail');
+    });
+
+    try {
+        await p;
+        throw new Error('should have failed');
+    } catch (e) {
+        expect(e).toBe('finally-fail');
+    }
+  });
 });
 
 describe('MyPromise Static Methods', () => {
