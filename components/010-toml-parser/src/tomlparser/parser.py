@@ -47,7 +47,7 @@ class Parser:
                 self._advance()
             elif token.type == TokenType.LBRACKET:
                 self._parse_table()
-            elif token.type in (TokenType.BARE_KEY, TokenType.STRING):
+            elif token.type in (TokenType.BARE_KEY, TokenType.STRING, TokenType.LITERAL_STRING, TokenType.INTEGER, TokenType.FLOAT):
                 self._parse_key_value(self.current_table)
             elif token.type == TokenType.EOF:
                 break
@@ -56,15 +56,15 @@ class Parser:
                 raise ValueError(f"Value without key at {token.line}:{token.column}")
             else:
                 # Other tokens might be part of an unexpected sequence
-                self._advance()
+                raise ValueError(f"Unexpected token at top level: {token.type} ({token.value}) at {token.line}:{token.column}")
         return self.result
 
     def _parse_key(self) -> List[str]:
         keys = []
         while True:
             token = self._peek()
-            if token.type in (TokenType.BARE_KEY, TokenType.STRING):
-                keys.append(token.value)
+            if token.type in (TokenType.BARE_KEY, TokenType.STRING, TokenType.LITERAL_STRING, TokenType.FLOAT, TokenType.INTEGER):
+                keys.append(str(token.value))
                 self._advance()
             else:
                 raise ValueError(f"Expected key, got {token.type} at {token.line}:{token.column}")
@@ -111,20 +111,30 @@ class Parser:
     def _parse_array(self) -> List[Any]:
         self._consume(TokenType.LBRACKET)
         array = []
-        while self._peek().type != TokenType.RBRACKET:
-            if self._peek().type == TokenType.NEWLINE:
+        while True:
+            # Skip initial newlines and comments (already skipped by lexer)
+            while self._peek().type == TokenType.NEWLINE:
                 self._advance()
-                continue
+
+            if self._peek().type == TokenType.RBRACKET:
+                break
+
             array.append(self._parse_value())
+
+            # After a value, skip newlines
+            while self._peek().type == TokenType.NEWLINE:
+                self._advance()
+
             if self._peek().type == TokenType.COMMA:
                 self._advance()
+                # Skip newlines after comma
+                while self._peek().type == TokenType.NEWLINE:
+                    self._advance()
             elif self._peek().type == TokenType.RBRACKET:
                 break
-            elif self._peek().type == TokenType.NEWLINE:
-                continue
             else:
-                # TOML allows trailing commas and newlines in arrays
-                pass
+                raise ValueError(f"Expected comma or ']' in array at {self._peek().line}:{self._peek().column}")
+
         self._consume(TokenType.RBRACKET)
         return array
 
@@ -135,6 +145,8 @@ class Parser:
             self._parse_key_value(table)
             if self._peek().type == TokenType.COMMA:
                 self._advance()
+                if self._peek().type == TokenType.RBRACE:
+                    raise ValueError(f"Trailing comma in inline table at {self._peek().line}:{self._peek().column}")
             elif self._peek().type == TokenType.RBRACE:
                 break
             else:
@@ -173,10 +185,10 @@ class Parser:
         else:
             self._consume(TokenType.RBRACKET)
 
-            table_name = ".".join(keys)
-            if table_name in self.defined_tables:
-                raise ValueError(f"Table redefinition: {table_name}")
-            self.defined_tables.add(table_name)
+            table_path = tuple(keys)
+            if table_path in self.defined_tables:
+                raise ValueError(f"Table redefinition: {'.'.join(keys)}")
+            self.defined_tables.add(table_path)
 
             curr = self.result
             for key in keys:

@@ -15,8 +15,9 @@ def _dump_table(data: Dict[str, Any], prefix: str = "") -> str:
     for key, value in data.items():
         if not isinstance(value, (dict, list)):
             lines.append(f"{_escape_key(key)} = {_dump_value(value)}")
-        elif isinstance(value, list) and not all(isinstance(v, dict) for v in value):
-             lines.append(f"{_escape_key(key)} = {_dump_value(value)}")
+        elif isinstance(value, list):
+            if not value or not all(isinstance(v, dict) for v in value):
+                lines.append(f"{_escape_key(key)} = {_dump_value(value)}")
 
     # Handle nested tables
     for key, value in data.items():

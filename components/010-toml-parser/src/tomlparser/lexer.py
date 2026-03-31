@@ -268,10 +268,15 @@ class Lexer:
 
         while self.pos < len(self.content):
             char = self.content[self.pos]
-            if char.isalnum() or char in '-_:.+TZ tz':
-                if char == '.' and not any(c in value for c in '0123456789'):
-                    # It's a dot for a dotted key, but only if we are not in a number/datetime
-                    break
+            if char.isalnum() or char in '-_:.+TZ tz' or (not value and char in '+-'):
+                if char == '.':
+                    # Only treat '.' as part of the value if the value is purely numeric so far.
+                    # This allows distinguishing between floats (3.14) and dotted keys (a1.b).
+                    # Bare keys cannot start with a digit in TOML but can contain them.
+                    # Actually TOML bare keys are [A-Za-z0-9_-]+.
+                    # If it starts with a digit, it might be a number.
+                    if value and not all(c.isdigit() or c in '+-' for c in value):
+                        break
                 # Peek for next char if it's space, check if it's part of datetime
                 if char == ' ':
                     # Only allow space if it's like "1979-05-27 07:32:00"
@@ -327,15 +332,54 @@ class Lexer:
                 elif clean_value.startswith('0b'):
                     num = int(clean_value, 2)
                 else:
-                    num = int(clean_value)
-                self.tokens.append(Token(TokenType.INTEGER, num, line, column))
+                    # Check for prohibited leading zeros in integers
+                    if len(clean_value) > 1 and clean_value.startswith('0'):
+                        # This will fail the float/int parse later, but better to be explicit
+                        pass
+                    elif (clean_value.startswith('+') or clean_value.startswith('-')) and len(clean_value) > 2 and clean_value[1] == '0':
+                        pass
+                    else:
+                        num = int(clean_value)
+                        self.tokens.append(Token(TokenType.INTEGER, num, line, column))
+                        return
+
+                # If we reach here, either it's not an int or it has invalid leading zeros
+                # If it had leading zeros, int() would still parse it, so we must raise.
+                if (clean_value.startswith('0') and len(clean_value) > 1) or \
+                   ((clean_value.startswith('+') or clean_value.startswith('-')) and len(clean_value) > 2 and clean_value[1] == '0'):
+                    raise ValueError(f"Invalid leading zero in integer: {value} at {line}:{column}")
                 return
         except ValueError:
             pass
 
         # If none of the above, it's a bare key
         # Bare keys only allow [A-Za-z0-9_-]
+        # BUT: In TOML, bare keys cannot start with a digit unless they are quoted.
+        # Actually, TOML spec says: "Bare keys may only contain ASCII alphanumerics, underscores, and dashes (A-Z, a-z, 0-9, _, -)."
+        # It doesn't explicitly forbid starting with a digit, BUT if it starts with a digit, it might be parsed as a number.
         if all(c.isalnum() or c in '-_' for c in value):
+             # Additional check: if it looks like it WAS intended to be a number but failed (like leading zeros),
+             # we should have already raised or it shouldn't be a bare key if it starts with digit?
+             # Actually, if it starts with a digit, it should NOT be a bare key if we want to follow TOML strictly?
+             # "Bare keys may only contain... (0-9)" -> it CAN contain digits.
+             # If it starts with a digit AND it's not a valid number, is it a bare key?
+             # TOML says: "Bare keys ... A-Z, a-z, 0-9, _, -". Yes, they can start with digits.
+             # HOWEVER, if it starts with '0' followed by digits, it's NOT a bare key if it was intended as a number.
+             # Let's re-read: "Bare keys ... must be non-empty."
+
+             # The issue is '01' was intended as a number in the test, but lexer fell through to BARE_KEY.
+             # If it starts with a digit, we should probably be more careful.
+             if (value[0].isdigit() or value[0] in '+-') and not all(c.isdigit() or c in '+-' for c in value):
+                 # It's a bare key starting with digit or sign, e.g., 1abc. This is allowed in TOML.
+                 pass
+             elif value[0].isdigit() or value[0] in '+-':
+                 # It's all digits (and optional sign) but didn't parse as INTEGER (likely due to leading zeros).
+                 clean_v = value.replace('_', '')
+                 if clean_v.startswith('0') and len(clean_v) > 1:
+                     raise ValueError(f"Invalid leading zero in integer: {value} at {line}:{column}")
+                 if (clean_v.startswith('+') or clean_v.startswith('-')) and len(clean_v) > 2 and clean_v[1] == '0':
+                     raise ValueError(f"Invalid leading zero in integer: {value} at {line}:{column}")
+
              self.tokens.append(Token(TokenType.BARE_KEY, value, line, column))
         else:
             # If it's not a valid bare key, maybe it was a malformed something else.
