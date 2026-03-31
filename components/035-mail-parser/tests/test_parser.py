@@ -1,4 +1,5 @@
 import pytest
+import base64
 from parser import MailParser
 from models import MailMessage, Attachment
 
@@ -149,3 +150,42 @@ def test_rfc822_attachment():
     assert len(mail.attachments) == 1
     assert mail.attachments[0].filename == "inner.eml"
     assert b"Inner body text" in mail.attachments[0].content
+
+def test_inline_rfc822_no_disposition():
+    raw_email = (
+        "Subject: Outer email\r\n"
+        "Content-Type: multipart/mixed; boundary=outer\r\n\r\n"
+        "--outer\r\n"
+        "Content-Type: text/plain\r\n\r\n"
+        "Outer body text\r\n"
+        "--outer\r\n"
+        "Content-Type: message/rfc822\r\n\r\n"
+        "Subject: Inner email\r\n"
+        "Content-Type: text/plain\r\n\r\n"
+        "Inner body text\r\n"
+        "--outer--"
+    )
+    mail = MailParser.parse(raw_email)
+    # The outer body should NOT be overwritten by the inner body
+    assert mail.content.text == "Outer body text"
+    assert len(mail.attachments) == 1
+    assert b"Inner body text" in mail.attachments[0].content
+
+def test_base64_encoded_rfc822():
+    # Construct an email with a base64 encoded message/rfc822 part
+    inner_email = b"Subject: Inner\r\n\r\nInner body"
+    encoded_inner = base64.b64encode(inner_email).decode('ascii')
+
+    raw_email = (
+        "Subject: Outer\r\n"
+        "Content-Type: multipart/mixed; boundary=outer\r\n\r\n"
+        "--outer\r\n"
+        "Content-Type: message/rfc822\r\n"
+        "Content-Transfer-Encoding: base64\r\n"
+        "Content-Disposition: attachment; filename=inner.eml\r\n\r\n"
+        f"{encoded_inner}\r\n"
+        "--outer--"
+    )
+    mail = MailParser.parse(raw_email)
+    assert len(mail.attachments) == 1
+    assert mail.attachments[0].content == inner_email

@@ -1,1 +1,0 @@
-# Encoding & Hash Toolkit

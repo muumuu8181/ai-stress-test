@@ -88,41 +88,37 @@ class MailParser:
     @staticmethod
     def _parse_payload(msg: Message, mail_message: MailMessage) -> None:
         """Recursively parses the email payload for body content and attachments."""
-        if msg.is_multipart():
-            # msg.walk() returns the message itself as the first part.
-            # We want to skip it if it's multipart/mixed etc. to avoid duplicate processing.
-            # However, we must be careful with nested message/rfc822.
+        # Use an explicit set to track parts we've already handled or parts within handled rfc822.
+        handled_parts = set()
 
-            # Use an explicit set to track parts we've already handled or parts within handled rfc822.
-            parts_list = list(msg.walk())
-            handled_parts = set()
+        for part in msg.walk():
+            if id(part) in handled_parts:
+                continue
 
-            for i, part in enumerate(parts_list):
-                if id(part) in handled_parts:
-                    continue
+            content_type = part.get_content_type()
+            is_rfc822 = content_type == 'message/rfc822'
+            is_multipart = part.get_content_maintype() == 'multipart' or part.get_content_maintype() == 'message'
 
-                content_type = part.get_content_type()
-                is_rfc822 = content_type == 'message/rfc822'
-                is_multipart = part.get_content_maintype() == 'multipart'
+            if is_multipart and not is_rfc822:
+                handled_parts.add(id(part))
+                continue
 
-                if is_multipart:
-                    handled_parts.add(id(part))
-                    continue
-
-                # If it's an attached rfc822, we handle it as an attachment and don't descend.
-                if is_rfc822 and (part.get_filename() or part.get_content_disposition() == 'attachment'):
-                    MailParser._process_single_part(part, mail_message)
-                    handled_parts.add(id(part))
-                    # Mark all children of this rfc822 as handled.
-                    # msg.walk() on this part would yield the part and its children.
-                    for child in part.walk():
-                        handled_parts.add(id(child))
-                    continue
-
+            # If it's a message/rfc822, we handle it as an attachment and don't descend.
+            # This applies even if it doesn't have a filename or disposition 'attachment',
+            # as descending can cause body overwriting and drops the rfc822 structure.
+            if is_rfc822:
                 MailParser._process_single_part(part, mail_message)
                 handled_parts.add(id(part))
-        else:
-            MailParser._process_single_part(msg, mail_message)
+                # Mark all children of this rfc822 as handled to prevent further walk() descent.
+                try:
+                    for child in part.walk():
+                        handled_parts.add(id(child))
+                except (TypeError, AttributeError):
+                    pass
+                continue
+
+            MailParser._process_single_part(part, mail_message)
+            handled_parts.add(id(part))
 
     @staticmethod
     def _process_single_part(part: Message, mail_message: MailMessage) -> None:
@@ -131,12 +127,35 @@ class MailParser:
         disposition = part.get_content_disposition()
         filename = part.get_filename()
 
-        # If it has a filename or is marked as attachment, treat it as an attachment
-        if filename or disposition == 'attachment':
+        # If it has a filename or is marked as attachment or is message/rfc822, treat it as an attachment
+        if filename or disposition == 'attachment' or content_type == 'message/rfc822':
             if content_type == 'message/rfc822':
-                payload = part.get_payload(0).as_bytes()
+                # For message/rfc822, the payload is often a list containing a single Message object.
+                # We want to extract that Message and convert it to bytes.
+                # If it's encoded (e.g. base64), get_payload(decode=True) might return the raw bytes.
+                payload = part.get_payload(decode=True)
+                if payload is None:
+                    # Not encoded, or it's a structured message/rfc822
+                    try:
+                        inner_msg = part.get_payload(0)
+                        if isinstance(inner_msg, Message):
+                            # If the inner message itself has been interpreted as just a placeholder
+                            # (no headers), it might be because the outer part was base64 encoded.
+                            if not inner_msg.items() and isinstance(inner_msg.get_payload(), str):
+                                import base64
+                                try:
+                                    payload = base64.b64decode(inner_msg.get_payload())
+                                except Exception:
+                                    payload = inner_msg.as_bytes()
+                            else:
+                                payload = inner_msg.as_bytes()
+                        else:
+                            payload = str(inner_msg).encode("utf-8")
+                    except (IndexError, TypeError):
+                        payload = None
             else:
                 payload = part.get_payload(decode=True)
+
             if payload is not None:
                 filename = MailParser._decode_mime_header(filename) if filename else "unnamed"
                 mail_message.attachments.append(Attachment(
