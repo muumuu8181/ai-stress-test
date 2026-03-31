@@ -74,6 +74,7 @@ class WebSocketServer:
         try:
             # 1. Perform Handshake
             request_data = b""
+            MAX_HANDSHAKE_SIZE = 16384 # 16KB limit
             while True:
                 chunk = await reader.read(4096)
                 if not chunk:
@@ -81,6 +82,8 @@ class WebSocketServer:
                 request_data += chunk
                 if b"\r\n\r\n" in request_data:
                     break
+                if len(request_data) > MAX_HANDSHAKE_SIZE:
+                    raise HandshakeError("Handshake request exceeds size limit")
 
             if not request_data:
                 writer.close()
