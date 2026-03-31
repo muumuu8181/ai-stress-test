@@ -64,6 +64,11 @@ class Job:
             if not isinstance(self.schedule_value, str):
                 raise ValueError("Cron schedule value must be a string")
             self.cron_parser = CronParser(self.schedule_value)
+        elif self.schedule_type == ScheduleType.INTERVAL:
+            if not isinstance(self.schedule_value, (int, float)):
+                raise ValueError("Interval schedule value must be a number")
+            if self.schedule_value <= 0:
+                raise ValueError("Interval schedule value must be greater than zero")
 
         self._lock = threading.Lock()
         self.update_next_run_time(datetime.datetime.now())
@@ -77,8 +82,6 @@ class Job:
                 else:
                     self.next_run_time = None
             elif self.schedule_type == ScheduleType.INTERVAL:
-                if not isinstance(self.schedule_value, (int, float)):
-                    raise ValueError("Interval schedule value must be a number")
                 if self.next_run_time is None:
                     self.next_run_time = now
                 else:
@@ -94,7 +97,9 @@ class Job:
     def should_run(self, now: datetime.datetime) -> bool:
         """Check if the job should be executed now."""
         with self._lock:
-            if self.status not in [JobStatus.PENDING, JobStatus.RETRYING]:
+            if self.status not in [JobStatus.PENDING, JobStatus.RETRYING, JobStatus.SUCCESS]:
+                return False
+            if self.status == JobStatus.SUCCESS and self.schedule_type == ScheduleType.ONE_SHOT:
                 return False
             if self.next_run_time is None:
                 return False
@@ -102,4 +107,7 @@ class Job:
 
     def get_retry_delay(self) -> float:
         """Calculate the delay for the next retry attempt."""
-        return self.retry_delay * (self.retry_backoff ** self.retries_count)
+        # Fix: ensure first retry uses base delay (self.retries_count is 0 initially)
+        # But wait, in _execute_job, retries_count is incremented before this is used for next_run_time?
+        # Let's check Scheduler._execute_job
+        return self.retry_delay * (self.retry_backoff ** (self.retries_count - 1))

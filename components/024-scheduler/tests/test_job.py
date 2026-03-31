@@ -46,12 +46,20 @@ def test_should_run():
 
 def test_retry_delay():
     job = Job(dummy_func, max_retries=3, retry_delay=1.0, retry_backoff=2.0)
-    assert job.get_retry_delay() == 1.0
+    # First retry (retries_count=1)
     job.retries_count = 1
-    assert job.get_retry_delay() == 2.0
+    assert job.get_retry_delay() == 1.0
+    # Second retry (retries_count=2)
     job.retries_count = 2
+    assert job.get_retry_delay() == 2.0
+    # Third retry (retries_count=3)
+    job.retries_count = 3
     assert job.get_retry_delay() == 4.0
 
 def test_invalid_interval():
     with pytest.raises(ValueError):
         Job(dummy_func, schedule_type=ScheduleType.INTERVAL, schedule_value="invalid")
+    with pytest.raises(ValueError):
+        Job(dummy_func, schedule_type=ScheduleType.INTERVAL, schedule_value=0)
+    with pytest.raises(ValueError):
+        Job(dummy_func, schedule_type=ScheduleType.INTERVAL, schedule_value=-1)

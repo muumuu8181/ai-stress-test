@@ -49,8 +49,33 @@ def test_cron_weekday_sunday():
     cp7 = CronParser("* * * * 7")
     assert cp7.weekdays == {6}
 
+def test_cron_or_logic():
+    # Standard Cron: if both DOM and DOW are restricted, it's OR.
+    # Run on 1st of month OR on Monday.
+    cp = CronParser("0 0 1 * 1")
+
+    # 2023-05-01 is Monday and 1st of month.
+    # 2023-05-02 is Tuesday.
+    # 2023-05-08 is Monday.
+
+    start = datetime.datetime(2023, 5, 1, 0, 0)
+    next_run = cp.get_next_occurrence(start)
+    assert next_run == datetime.datetime(2023, 5, 8, 0, 0) # Next Monday
+
+    start = datetime.datetime(2023, 5, 8, 0, 0)
+    next_run = cp.get_next_occurrence(start)
+    assert next_run == datetime.datetime(2023, 5, 15, 0, 0) # Next Monday
+
+    start = datetime.datetime(2023, 5, 29, 0, 0)
+    next_run = cp.get_next_occurrence(start)
+    assert next_run == datetime.datetime(2023, 6, 1, 0, 0) # 1st of next month
+
 def test_invalid_cron():
     with pytest.raises(ValueError):
         CronParser("* * * *")  # Too few parts
     with pytest.raises(ValueError):
         CronParser("60 * * * *")  # Minute out of range
+    with pytest.raises(ValueError):
+        CronParser("* * 5-3 * *") # Invalid range
+    with pytest.raises(ValueError):
+        CronParser("* * * * */0") # Invalid step

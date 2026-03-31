@@ -92,6 +92,13 @@ class Scheduler:
                 for job in self.jobs.values():
                     if job.status == JobStatus.CANCELLED:
                         continue
+
+                    # If job is SUCCESS, we might need to reset it to PENDING if its time to run again
+                    # This allows dependencies to see SUCCESS status between runs
+                    if job.status == JobStatus.SUCCESS and job.schedule_type in [ScheduleType.INTERVAL, ScheduleType.CRON]:
+                        if job.should_run(now):
+                            job.status = JobStatus.PENDING
+
                     if job.should_run(now):
                         # Check dependencies
                         dependencies_satisfied = True
@@ -149,6 +156,7 @@ class Scheduler:
             with self._lock:
                 # Only update if job status is still RUNNING (not CANCELLED)
                 if job.status != JobStatus.RUNNING:
+                    history.status = job.status # Update history status if it was cancelled
                     return
 
                 if status == "success":
@@ -157,18 +165,15 @@ class Scheduler:
                     history.status = JobStatus.SUCCESS
                     history.return_value = result_or_err
 
-                    # Update next run time before setting status to PENDING
+                    # Update next run time
                     job.update_next_run_time(datetime.datetime.now())
-
-                    # If it's a recurring job, reset to PENDING so it can run again
-                    if job.schedule_type in [ScheduleType.INTERVAL, ScheduleType.CRON]:
-                        job.status = JobStatus.PENDING
                 else:
                     raise result_or_err
         except queue.Empty:
             # Timeout occurred
             with self._lock:
                 if job.status != JobStatus.RUNNING:
+                    history.status = job.status
                     return
 
                 error_msg = f"Job {job.job_id} timed out after {job.timeout}s"
@@ -187,6 +192,7 @@ class Scheduler:
         except Exception as e:
             with self._lock:
                 if job.status != JobStatus.RUNNING:
+                    history.status = job.status
                     return
 
                 if job.retries_count < job.max_retries:
