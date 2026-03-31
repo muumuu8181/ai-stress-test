@@ -9,7 +9,7 @@ A thread-safe Least Recently Used (LRU) cache implementation in Python with supp
 - **Thread-Safe**: Uses a reentrant lock to ensure safety in multi-threaded environments.
 - **Statistics Tracking**: Monitor cache performance with `hit_rate`, `miss_count`, and `eviction_count`.
 - **Event Callbacks**: Register `on_evict` and `on_expire` hooks to handle item removal.
-- **Persistence**: Save and restore the cache state to/from disk.
+- **Persistence**: Save and restore the cache state to/from disk (via `pickle`).
 
 ## Installation
 

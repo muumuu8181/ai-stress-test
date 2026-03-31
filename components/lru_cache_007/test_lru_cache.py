@@ -148,3 +148,19 @@ def test_callbacks():
     cache.put("c", 3) # "a" is at front and is expired.
     assert expired == [("a", 1)]
     assert evicted == []
+
+def test_priority_cleanup():
+    # Test that expired items are cleaned up before LRU valid items are evicted
+    cache = LRUCache(capacity=2)
+    cache.put("a", 1) # This will be the LRU item
+    cache.put("b", 2, ttl=0.01) # This will be expired
+    time.sleep(0.02)
+
+    # "b" is expired but not yet removed.
+    # Adding "c" should trigger cleanup of "b", keeping "a" (which is valid but LRU).
+    cache.put("c", 3)
+
+    assert cache.get("a") == 1
+    assert cache.get("c") == 3
+    assert cache.get("b") is None
+    assert cache.eviction_count == 0 # "b" was expired, not evicted for capacity

@@ -108,9 +108,22 @@ class LRUCache:
                  If None, the default_ttl specified during initialization is used.
         """
         with self.lock:
-            # Handle eviction before adding new item if key is new and capacity reached
-            if key not in self.cache and len(self.cache) >= self.capacity:
-                self._evict_lru()
+            # If the key is already present, just update it
+            if key in self.cache:
+                current_ttl = ttl if ttl is not None else self.default_ttl
+                expiry = time.time() + current_ttl if current_ttl is not None else float('inf')
+                self.cache[key] = (value, expiry)
+                self.cache.move_to_end(key)
+                return
+
+            # Key is new. Check if we need to make space.
+            if len(self.cache) >= self.capacity:
+                # First, try to remove all expired items
+                self._cleanup_expired()
+
+                # If still at capacity, perform LRU eviction
+                if len(self.cache) >= self.capacity:
+                    self._evict_lru()
 
             # Calculate expiry time
             current_ttl = ttl if ttl is not None else self.default_ttl
@@ -119,6 +132,19 @@ class LRUCache:
             # Add or update item and move to end (most recently used)
             self.cache[key] = (value, expiry)
             self.cache.move_to_end(key)
+
+    def _cleanup_expired(self) -> None:
+        """
+        Internal method to remove all expired items from the cache.
+        """
+        now = time.time()
+        expired_keys = [k for k, (v, exp) in self.cache.items() if exp < now]
+        for k in expired_keys:
+            val, exp = self.cache.pop(k)
+            # Note: Removal of expired items during cleanup is not counted as 'eviction'
+            # but we trigger the callback.
+            if self.on_expire:
+                self.on_expire(k, val)
 
     def _evict_lru(self) -> None:
         """
@@ -138,6 +164,11 @@ class LRUCache:
         """
         Save the current state of the cache to a file using pickle.
 
+        .. warning::
+           The pickle module is not secure. Only unpickle data you trust.
+           It is possible to craft malicious pickle data which will execute
+           arbitrary code during unpickling.
+
         Args:
             filepath: Path to the file where the cache state will be saved.
         """
@@ -156,6 +187,11 @@ class LRUCache:
     def restore(self, filepath: str) -> None:
         """
         Restore the cache state from a file.
+
+        .. warning::
+           The pickle module is not secure. Only unpickle data you trust.
+           It is possible to craft malicious pickle data which will execute
+           arbitrary code during unpickling.
 
         Args:
             filepath: Path to the file containing the saved cache state.
