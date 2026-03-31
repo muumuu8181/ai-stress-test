@@ -64,6 +64,8 @@ class WebSocketServer:
         self.on_connect = on_connect
         self.on_disconnect = on_disconnect
         self.connections: Set[WebSocketConnection] = set()
+        self._frag_buffer = bytearray()
+        self._frag_opcode = None
 
     async def _handle_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         """Internal handler for new TCP connections."""
@@ -89,8 +91,8 @@ class WebSocketServer:
             handshake_bytes = parts[0] + b"\r\n\r\n"
             buffer = parts[1] if len(parts) > 1 else b""
 
-            headers = parse_http_headers(handshake_bytes)
-            sec_key = validate_handshake(headers)
+            request_line, headers = parse_http_headers(handshake_bytes)
+            sec_key = validate_handshake(request_line, headers)
             accept_key = generate_accept_key(sec_key)
             response = build_handshake_response(accept_key)
 
@@ -165,13 +167,35 @@ class WebSocketServer:
         elif frame.opcode == Opcode.PONG:
             pass  # Received pong
         elif frame.opcode in (Opcode.TEXT, Opcode.BINARY):
-            if self.handler:
-                res = self.handler(conn, frame.payload)
-                if asyncio.iscoroutine(res):
-                    await res
+            if not frame.fin:
+                self._frag_buffer.extend(frame.payload.encode("utf-8") if isinstance(frame.payload, str) else frame.payload)
+                self._frag_opcode = frame.opcode
+            else:
+                if self.handler:
+                    res = self.handler(conn, frame.payload)
+                    if asyncio.iscoroutine(res):
+                        await res
         elif frame.opcode == Opcode.CONTINUATION:
-            # Fragmentation not fully implemented in this version
-            pass
+            if self._frag_opcode is None:
+                raise FrameError("Received continuation frame without preceding fragment")
+
+            self._frag_buffer.extend(frame.payload.encode("utf-8") if isinstance(frame.payload, str) else frame.payload)
+
+            if frame.fin:
+                full_payload = bytes(self._frag_buffer)
+                if self._frag_opcode == Opcode.TEXT:
+                    try:
+                        full_payload = full_payload.decode("utf-8")
+                    except UnicodeDecodeError:
+                        raise FrameError("Invalid UTF-8 in fragmented text message")
+
+                if self.handler:
+                    res = self.handler(conn, full_payload)
+                    if asyncio.iscoroutine(res):
+                        await res
+
+                self._frag_buffer.clear()
+                self._frag_opcode = None
 
     async def start(self, host: str, port: int):
         """Starts the WebSocket server."""

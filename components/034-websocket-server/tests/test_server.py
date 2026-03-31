@@ -73,7 +73,7 @@ async def test_full_lifecycle():
 
     # 3. Receive Echo
     echo_data = await reader.read(4096)
-    echo_frame, _ = decode_frame(echo_data)
+    echo_frame, _ = decode_frame(echo_data, from_client=False)
     assert echo_frame.payload == f"Echo: {msg}"
     assert received_messages == [msg]
 
@@ -83,7 +83,7 @@ async def test_full_lifecycle():
     await writer.drain()
 
     pong_data = await reader.read(4096)
-    pong_frame, _ = decode_frame(pong_data)
+    pong_frame, _ = decode_frame(pong_data, from_client=False)
     assert pong_frame.opcode == Opcode.PONG
     assert pong_frame.payload == b"ping data"
 
@@ -95,7 +95,7 @@ async def test_full_lifecycle():
     # Server should send close back and close connection
     close_resp = await reader.read(4096)
     assert close_resp # Should get something
-    close_resp_frame, _ = decode_frame(close_resp)
+    close_resp_frame, _ = decode_frame(close_resp, from_client=False)
     assert close_resp_frame.opcode == Opcode.CLOSE
 
     # Wait for EOF
@@ -140,6 +140,7 @@ async def test_server_binary_and_on_connect():
         f"Upgrade: websocket\r\n"
         f"Connection: Upgrade\r\n"
         f"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+        f"Sec-WebSocket-Version: 13\r\n"
         f"\r\n"
     ).encode()
     writer.write(handshake)
@@ -155,7 +156,7 @@ async def test_server_binary_and_on_connect():
     await writer.drain()
 
     echo_data = await reader.read(4096)
-    echo_frame, _ = decode_frame(echo_data)
+    echo_frame, _ = decode_frame(echo_data, from_client=False)
     assert echo_frame.opcode == Opcode.BINARY
     assert echo_frame.payload == msg
 
@@ -187,6 +188,7 @@ async def test_server_large_frame():
         f"Upgrade: websocket\r\n"
         f"Connection: Upgrade\r\n"
         f"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+        f"Sec-WebSocket-Version: 13\r\n"
         f"\r\n"
     ).encode()
     writer.write(handshake)
@@ -200,7 +202,7 @@ async def test_server_large_frame():
     await writer.drain()
 
     echo_data = await reader.read(1024)
-    echo_frame, _ = decode_frame(echo_data)
+    echo_frame, _ = decode_frame(echo_data, from_client=False)
     assert echo_frame.payload == msg
 
     writer.close()
@@ -225,6 +227,7 @@ async def test_server_partial_frames():
         f"Upgrade: websocket\r\n"
         f"Connection: Upgrade\r\n"
         f"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+        f"Sec-WebSocket-Version: 13\r\n"
         f"\r\n"
     ).encode()
     writer.write(handshake)
@@ -243,7 +246,7 @@ async def test_server_partial_frames():
     await writer.drain()
 
     echo_data = await reader.read(1024)
-    echo_frame, _ = decode_frame(echo_data)
+    echo_frame, _ = decode_frame(echo_data, from_client=False)
     assert echo_frame.payload == msg
 
     writer.close()
@@ -268,6 +271,7 @@ async def test_server_ping_pong():
         f"Upgrade: websocket\r\n"
         f"Connection: Upgrade\r\n"
         f"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+        f"Sec-WebSocket-Version: 13\r\n"
         f"\r\n"
     ).encode()
     writer.write(handshake)
@@ -280,7 +284,7 @@ async def test_server_ping_pong():
     await writer.drain()
 
     pong_data = await reader.read(1024)
-    pong_frame, _ = decode_frame(pong_data)
+    pong_frame, _ = decode_frame(pong_data, from_client=False)
     assert pong_frame.opcode == Opcode.PONG
     assert pong_frame.payload == ping_payload
 
@@ -290,7 +294,7 @@ async def test_server_ping_pong():
     await conn.ping(b"server ping")
 
     ping_data = await reader.read(1024)
-    ping_frame, _ = decode_frame(ping_data)
+    ping_frame, _ = decode_frame(ping_data, from_client=False)
     assert ping_frame.opcode == Opcode.PING
     assert ping_frame.payload == b"server ping"
 
@@ -350,6 +354,7 @@ async def test_server_invalid_frame_protocol_error():
         f"Upgrade: websocket\r\n"
         f"Connection: Upgrade\r\n"
         f"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+        f"Sec-WebSocket-Version: 13\r\n"
         f"\r\n"
     ).encode()
     writer.write(handshake)
@@ -362,7 +367,7 @@ async def test_server_invalid_frame_protocol_error():
 
     # Server should send close frame with protocol error (1002)
     close_data = await reader.read(1024)
-    close_frame, _ = decode_frame(close_data)
+    close_frame, _ = decode_frame(close_data, from_client=False)
     assert close_frame.opcode == Opcode.CLOSE
     # Payload should start with 1002
     assert int.from_bytes(close_frame.payload[:2], "big") == 1002
@@ -389,6 +394,7 @@ async def test_server_connection_reset():
         f"Upgrade: websocket\r\n"
         f"Connection: Upgrade\r\n"
         f"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+        f"Sec-WebSocket-Version: 13\r\n"
         f"\r\n"
     ).encode()
     writer.write(handshake)
@@ -434,6 +440,7 @@ async def test_server_sync_handlers():
         f"Upgrade: websocket\r\n"
         f"Connection: Upgrade\r\n"
         f"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+        f"Sec-WebSocket-Version: 13\r\n"
         f"\r\n"
     ).encode()
     writer.write(handshake)
@@ -445,6 +452,52 @@ async def test_server_sync_handlers():
     # Message
     writer.write(encode_frame(Opcode.TEXT, "test", mask=True))
     await writer.drain()
+
+    writer.close()
+    await writer.wait_closed()
+    server.close()
+    await server.wait_closed()
+    server_task.cancel()
+
+@pytest.mark.asyncio
+async def test_server_fragmentation():
+    received = []
+    async def handler(conn, payload):
+        received.append(payload)
+
+    srv = WebSocketServer(handler=handler)
+    server = await asyncio.start_server(srv._handle_connection, "127.0.0.1", 0)
+    addr = server.sockets[0].getsockname()
+    host, port = addr[0], addr[1]
+    server_task = asyncio.create_task(server.serve_forever())
+
+    reader, writer = await asyncio.open_connection(host, port)
+
+    # Handshake
+    handshake = (
+        f"GET / HTTP/1.1\r\n"
+        f"Upgrade: websocket\r\n"
+        f"Connection: Upgrade\r\n"
+        f"Sec-WebSocket-Key: somekey\r\n"
+        f"Sec-WebSocket-Version: 13\r\n"
+        f"\r\n"
+    ).encode()
+    writer.write(handshake)
+    await writer.drain()
+    await reader.read(4096)
+
+    # Fragmented message
+    # 1. Text fragment (FIN=0, TEXT)
+    writer.write(encode_frame(Opcode.TEXT, "Hello ", fin=False, mask=True))
+    # 2. Continuation fragment (FIN=0, CONT)
+    writer.write(encode_frame(Opcode.CONTINUATION, "beautiful ", fin=False, mask=True))
+    # 3. Last continuation fragment (FIN=1, CONT)
+    writer.write(encode_frame(Opcode.CONTINUATION, "world", fin=True, mask=True))
+    await writer.drain()
+
+    # Wait a bit for server to process
+    await asyncio.sleep(0.1)
+    assert received == ["Hello beautiful world"]
 
     writer.close()
     await writer.wait_closed()

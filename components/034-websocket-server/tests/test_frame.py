@@ -3,22 +3,22 @@ from websocket_server.frame import encode_frame, decode_frame, Opcode, FrameErro
 
 def test_encode_decode_small_text():
     text = "Hello, WebSocket!"
-    encoded = encode_frame(Opcode.TEXT, text)
+    encoded = encode_frame(Opcode.TEXT, text, mask=True)
     frame, consumed = decode_frame(encoded)
     assert frame.opcode == Opcode.TEXT
     assert frame.payload == text
     assert frame.fin is True
-    assert frame.mask is False
+    assert frame.mask is True
     assert consumed == len(encoded)
 
 def test_encode_decode_binary():
     data = b"\x01\x02\x03\x04"
-    encoded = encode_frame(Opcode.BINARY, data)
+    encoded = encode_frame(Opcode.BINARY, data, mask=True)
     frame, consumed = decode_frame(encoded)
     assert frame.opcode == Opcode.BINARY
     assert frame.payload == data
     assert frame.fin is True
-    assert frame.mask is False
+    assert frame.mask is True
     assert consumed == len(encoded)
 
 def test_encode_decode_with_masking():
@@ -33,23 +33,23 @@ def test_encode_decode_with_masking():
 
 def test_decode_extended_payload_2bytes():
     payload = b"A" * 200
-    encoded = encode_frame(Opcode.BINARY, payload)
-    assert encoded[1] == 126
+    encoded = encode_frame(Opcode.BINARY, payload, mask=True)
+    assert encoded[1] == (128 | 126)
     frame, consumed = decode_frame(encoded)
     assert frame.payload == payload
     assert consumed == len(encoded)
 
 def test_decode_extended_payload_8bytes():
     payload = b"B" * 70000
-    encoded = encode_frame(Opcode.BINARY, payload)
-    assert encoded[1] == 127
+    encoded = encode_frame(Opcode.BINARY, payload, mask=True)
+    assert encoded[1] == (128 | 127)
     frame, consumed = decode_frame(encoded)
     assert frame.payload == payload
     assert consumed == len(encoded)
 
 def test_decode_fragmented_data():
     text = "Part 1"
-    encoded = encode_frame(Opcode.TEXT, text)
+    encoded = encode_frame(Opcode.TEXT, text, mask=True)
     # Give only part of the frame
     with pytest.raises(IncompleteFrameError, match="Incomplete payload"):
         decode_frame(encoded[:-2])
@@ -66,6 +66,29 @@ def test_decode_short_frame():
 
 def test_decode_invalid_utf8_text_frame():
     # Opcode TEXT but invalid UTF-8 payload
-    data = bytes([0x81, 0x02, 0xFF, 0xFF])
+    data = encode_frame(Opcode.TEXT, b"\xFF\xFF", mask=True)
     with pytest.raises(FrameError, match="Invalid UTF-8 in text frame"):
+        decode_frame(data)
+
+def test_decode_unmasked_frame_fails():
+    data = encode_frame(Opcode.TEXT, "hello", mask=False)
+    with pytest.raises(FrameError, match="Client frames must be masked"):
+        decode_frame(data)
+
+def test_decode_control_frame_fragmented_fails():
+    # Opcode 8 (CLOSE) with FIN=0
+    data = bytes([0x08, 0x80, 0x00, 0x00, 0x00, 0x00])
+    with pytest.raises(FrameError, match="Control frames must not be fragmented"):
+        decode_frame(data)
+
+def test_decode_control_frame_large_payload_fails():
+    # Opcode 9 (PING) with payload len 126
+    data = bytes([0x89, 0xFE, 0x00, 0x7E, 0x00, 0x00, 0x00, 0x00])
+    with pytest.raises(FrameError, match="Control frames must have payload length <= 125"):
+        decode_frame(data)
+
+def test_decode_rsv_bits_fails():
+    # RSV1 set
+    data = bytes([0xC1, 0x80, 0x00, 0x00, 0x00, 0x00])
+    with pytest.raises(FrameError, match="Reserved bits \(RSV1, RSV2, RSV3\) must be zero"):
         decode_frame(data)

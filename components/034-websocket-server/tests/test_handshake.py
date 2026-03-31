@@ -19,11 +19,17 @@ def test_parse_http_headers():
         b"Sec-WebSocket-Version: 13\r\n"
         b"\r\n"
     )
-    headers = parse_http_headers(raw_request)
+    request_line, headers = parse_http_headers(raw_request)
+    assert request_line == "GET /chat HTTP/1.1"
     assert headers["host"] == "server.example.com"
     assert headers["upgrade"] == "websocket"
     assert headers["connection"] == "Upgrade"
     assert headers["sec-websocket-key"] == "dGhlIHNhbXBsZSBub25jZQ=="
+
+def test_parse_http_headers_no_space():
+    raw_request = b"GET / HTTP/1.1\r\nUpgrade:websocket\r\n\r\n"
+    request_line, headers = parse_http_headers(raw_request)
+    assert headers["upgrade"] == "websocket"
 
 def test_parse_http_headers_invalid():
     with pytest.raises(HandshakeError):
@@ -38,33 +44,52 @@ def test_validate_handshake_success():
     headers = {
         "upgrade": "websocket",
         "connection": "upgrade",
-        "sec-websocket-key": "somekey"
+        "sec-websocket-key": "somekey",
+        "sec-websocket-version": "13"
     }
-    assert validate_handshake(headers) == "somekey"
+    assert validate_handshake("GET / HTTP/1.1", headers) == "somekey"
+
+def test_validate_handshake_invalid_method():
+    headers = {"upgrade": "websocket", "connection": "upgrade", "sec-websocket-key": "somekey", "sec-websocket-version": "13"}
+    with pytest.raises(HandshakeError, match="Method must be GET"):
+        validate_handshake("POST / HTTP/1.1", headers)
 
 def test_validate_handshake_missing_upgrade():
     headers = {
         "connection": "Upgrade",
-        "sec-websocket-key": "somekey"
+        "sec-websocket-key": "somekey",
+        "sec-websocket-version": "13"
     }
     with pytest.raises(HandshakeError, match="Missing or invalid 'Upgrade' header"):
-        validate_handshake(headers)
+        validate_handshake("GET / HTTP/1.1", headers)
 
 def test_validate_handshake_missing_connection():
     headers = {
         "upgrade": "websocket",
-        "sec-websocket-key": "somekey"
+        "sec-websocket-key": "somekey",
+        "sec-websocket-version": "13"
     }
     with pytest.raises(HandshakeError, match="Missing or invalid 'Connection' header"):
-        validate_handshake(headers)
+        validate_handshake("GET / HTTP/1.1", headers)
+
+def test_validate_handshake_invalid_version():
+    headers = {
+        "upgrade": "websocket",
+        "connection": "upgrade",
+        "sec-websocket-key": "somekey",
+        "sec-websocket-version": "8"
+    }
+    with pytest.raises(HandshakeError, match="Unsupported Sec-WebSocket-Version"):
+        validate_handshake("GET / HTTP/1.1", headers)
 
 def test_validate_handshake_missing_key():
     headers = {
         "upgrade": "websocket",
-        "connection": "upgrade"
+        "connection": "upgrade",
+        "sec-websocket-version": "13"
     }
     with pytest.raises(HandshakeError, match="Missing 'Sec-WebSocket-Key' header"):
-        validate_handshake(headers)
+        validate_handshake("GET / HTTP/1.1", headers)
 
 def test_build_handshake_response():
     accept_key = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="

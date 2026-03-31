@@ -36,12 +36,13 @@ class Frame:
     def __repr__(self) -> str:
         return f"Frame(opcode={self.opcode!r}, payload_len={len(self.payload)}, fin={self.fin}, mask={self.mask})"
 
-def decode_frame(data: bytes) -> Tuple[Frame, int]:
+def decode_frame(data: bytes, from_client: bool = True) -> Tuple[Frame, int]:
     """
     Decodes a WebSocket frame from raw bytes.
 
     Args:
         data: The raw bytes received.
+        from_client: Whether the frame is from a client (requires masking).
 
     Returns:
         A tuple containing the Frame object and the number of bytes consumed.
@@ -55,13 +56,29 @@ def decode_frame(data: bytes) -> Tuple[Frame, int]:
 
     first_byte, second_byte = struct.unpack("!BB", data[:2])
     fin = (first_byte & 0x80) != 0
+    rsv = (first_byte & 0x70) >> 4
+    if rsv != 0:
+        raise FrameError("Reserved bits (RSV1, RSV2, RSV3) must be zero")
+
     opcode_value = first_byte & 0x0F
     try:
         opcode = Opcode(opcode_value)
     except ValueError:
         raise FrameError(f"Unknown opcode: {opcode_value}")
 
+    # Control frame validation
+    if opcode >= 0x8:
+        if not fin:
+            raise FrameError("Control frames must not be fragmented")
+        if (second_byte & 0x7F) > 125:
+            raise FrameError("Control frames must have payload length <= 125")
+
     mask_bit = (second_byte & 0x80) != 0
+    if from_client and not mask_bit:
+        # RFC 6455 Section 5.1: The server MUST close the connection
+        # if it receives an unmasked frame.
+        raise FrameError("Client frames must be masked")
+
     payload_len = second_byte & 0x7F
 
     offset = 2
