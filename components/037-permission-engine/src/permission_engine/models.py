@@ -1,4 +1,4 @@
-from typing import List, Optional, Set
+from typing import List, Optional, Set, Callable
 
 
 class Role:
@@ -16,6 +16,16 @@ class Role:
         """
         self.name: str = name
         self.parents: Set["Role"] = set()
+        self._on_change: Optional[Callable[[], None]] = None
+
+    def set_on_change_callback(self, callback: Callable[[], None]) -> None:
+        """
+        Sets a callback to be called when the role's inheritance changes.
+
+        Args:
+            callback (Callable[[], None]): The callback function.
+        """
+        self._on_change = callback
 
     def add_parent(self, parent: "Role") -> None:
         """
@@ -26,7 +36,11 @@ class Role:
         """
         if parent == self:
             raise ValueError("A role cannot be its own parent.")
-        self.parents.add(parent)
+
+        if parent not in self.parents:
+            self.parents.add(parent)
+            if self._on_change:
+                self._on_change()
 
     def __repr__(self) -> str:
         return f"Role(name='{self.name}')"

@@ -18,21 +18,48 @@ class PermissionEngine:
         self.policies_by_role: Dict[str, List[Policy]] = {}
         self._cache: Dict[Tuple[str, str, str], bool] = {}
 
-    def add_role(self, role: Role) -> None:
+    def add_role(self, role: Role) -> Role:
         """
-        Adds a new role to the engine.
+        Adds a new role to the engine, resolving parent references to canonical instances.
 
         Args:
             role (Role): The role to add.
+
+        Returns:
+            Role: The canonical role instance in the engine.
+        """
+        return self._add_role_recursive(role, set())
+
+    def _add_role_recursive(self, role: Role, visited: Set[str]) -> Role:
+        """
+        Recursively adds roles and their parents to the engine.
+
+        Args:
+            role (Role): The role to add.
+            visited (Set[str]): Set of role names currently being processed to detect cycles.
+
+        Returns:
+            Role: The canonical role instance.
         """
         if role.name in self.roles:
-            # Update the existing role's parents if necessary
-            existing_role = self.roles[role.name]
-            for parent in role.parents:
-                existing_role.add_parent(parent)
+            canonical_role = self.roles[role.name]
         else:
-            self.roles[role.name] = role
+            canonical_role = Role(role.name)
+            canonical_role.set_on_change_callback(self._clear_cache)
+            self.roles[role.name] = canonical_role
+
+        if role.name in visited:
+            return canonical_role
+        visited.add(role.name)
+
+        # Build a list of canonical parents from the *provided* role object
+        for parent in role.parents:
+            canonical_parent = self._add_role_recursive(parent, visited)
+            canonical_role.add_parent(canonical_parent)
+
+        visited.remove(role.name)
         self._clear_cache()
+        return canonical_role
 
     def get_role(self, name: str) -> Optional[Role]:
         """
@@ -48,20 +75,22 @@ class PermissionEngine:
 
     def add_policy(self, policy: Policy) -> None:
         """
-        Adds a new policy to the engine.
+        Adds a new policy to the engine, ensuring the role and its hierarchy are merged.
 
         Args:
             policy (Policy): The policy to add.
         """
-        # Ensure role is registered
-        if policy.role.name not in self.roles:
-            self.add_role(policy.role)
+        # Ensure role is registered and merged canonically
+        canonical_role = self.add_role(policy.role)
 
-        role_name = policy.role.name
+        # Create a new policy with the canonical role
+        canonical_policy = Policy(canonical_role, policy.permission)
+
+        role_name = canonical_role.name
         if role_name not in self.policies_by_role:
             self.policies_by_role[role_name] = []
 
-        self.policies_by_role[role_name].append(policy)
+        self.policies_by_role[role_name].append(canonical_policy)
         self._clear_cache()
 
     def _clear_cache(self) -> None:
