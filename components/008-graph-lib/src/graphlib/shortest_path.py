@@ -2,7 +2,10 @@ import heapq
 from typing import Any, Dict, List, Optional, Union, Tuple
 from .graph import Graph
 
-def dijkstra(graph: Graph, start_node: Any) -> Tuple[Dict[Any, Union[int, float]], Dict[Any, Optional[Any]]]:
+
+def dijkstra(
+    graph: Graph, start_node: Any
+) -> Tuple[Dict[Any, Union[int, float]], Dict[Any, Optional[Any]]]:
     """
     Computes the shortest paths from a start node to all other reachable nodes
     using Dijkstra's algorithm.
@@ -19,7 +22,9 @@ def dijkstra(graph: Graph, start_node: Any) -> Tuple[Dict[Any, Union[int, float]
     if start_node not in graph.vertices:
         return {}, {}
 
-    distances: Dict[Any, Union[int, float]] = {node: float('inf') for node in graph.vertices}
+    distances: Dict[Any, Union[int, float]] = {
+        node: float("inf") for node in graph.vertices
+    }
     predecessors: Dict[Any, Optional[Any]] = {node: None for node in graph.vertices}
     distances[start_node] = 0
 
@@ -41,7 +46,10 @@ def dijkstra(graph: Graph, start_node: Any) -> Tuple[Dict[Any, Union[int, float]
 
     return distances, predecessors
 
-def bellman_ford(graph: Graph, start_node: Any) -> Tuple[Dict[Any, Union[int, float]], Dict[Any, Optional[Any]]]:
+
+def bellman_ford(
+    graph: Graph, start_node: Any
+) -> Tuple[Dict[Any, Union[int, float]], Dict[Any, Optional[Any]]]:
     """
     Computes the shortest paths from a start node to all other reachable nodes
     using the Bellman-Ford algorithm.
@@ -62,7 +70,9 @@ def bellman_ford(graph: Graph, start_node: Any) -> Tuple[Dict[Any, Union[int, fl
     if start_node not in graph.vertices:
         return {}, {}
 
-    distances: Dict[Any, Union[int, float]] = {node: float('inf') for node in graph.vertices}
+    distances: Dict[Any, Union[int, float]] = {
+        node: float("inf") for node in graph.vertices
+    }
     predecessors: Dict[Any, Optional[Any]] = {node: None for node in graph.vertices}
     distances[start_node] = 0
 
@@ -70,13 +80,16 @@ def bellman_ford(graph: Graph, start_node: Any) -> Tuple[Dict[Any, Union[int, fl
     for _ in range(len(vertices) - 1):
         for u in vertices:
             for v, weight in graph.get_neighbors(u).items():
-                if distances[u] != float('inf') and distances[u] + weight < distances[v]:
+                if (
+                    distances[u] != float("inf")
+                    and distances[u] + weight < distances[v]
+                ):
                     distances[v] = distances[u] + weight
                     predecessors[v] = u
 
     for u in vertices:
         for v, weight in graph.get_neighbors(u).items():
-            if distances[u] != float('inf') and distances[u] + weight < distances[v]:
+            if distances[u] != float("inf") and distances[u] + weight < distances[v]:
                 raise ValueError("Graph contains a negative weight cycle")
 
     return distances, predecessors

@@ -2,7 +2,10 @@ from typing import Any, List, Set, Deque, Callable, Optional
 from collections import deque
 from .graph import Graph
 
-def bfs(graph: Graph, start_node: Any, visitor: Optional[Callable[[Any], None]] = None) -> List[Any]:
+
+def bfs(
+    graph: Graph, start_node: Any, visitor: Optional[Callable[[Any], None]] = None
+) -> List[Any]:
     """
     Performs a Breadth-First Search on the graph starting from start_node.
 
@@ -34,7 +37,10 @@ def bfs(graph: Graph, start_node: Any, visitor: Optional[Callable[[Any], None]] 
 
     return order
 
-def dfs(graph: Graph, start_node: Any, visitor: Optional[Callable[[Any], None]] = None) -> List[Any]:
+
+def dfs(
+    graph: Graph, start_node: Any, visitor: Optional[Callable[[Any], None]] = None
+) -> List[Any]:
     """
     Performs a Depth-First Search on the graph starting from start_node.
 
@@ -64,6 +70,7 @@ def dfs(graph: Graph, start_node: Any, visitor: Optional[Callable[[Any], None]] 
 
     _dfs_recursive(start_node)
     return order
+
 
 def find_connected_components(graph: Graph) -> List[Set[Any]]:
     """
@@ -96,6 +103,7 @@ def find_connected_components(graph: Graph) -> List[Set[Any]]:
 
     return components
 
+
 def has_cycle(graph: Graph) -> bool:
     """
     Detects if the graph contains a cycle.
@@ -110,6 +118,7 @@ def has_cycle(graph: Graph) -> bool:
         return _has_cycle_directed(graph)
     else:
         return _has_cycle_undirected(graph)
+
 
 def _has_cycle_directed(graph: Graph) -> bool:
     visited: Set[Any] = set()
@@ -134,6 +143,7 @@ def _has_cycle_directed(graph: Graph) -> bool:
             if _dfs_cycle(node):
                 return True
     return False
+
 
 def _has_cycle_undirected(graph: Graph) -> bool:
     visited: Set[Any] = set()

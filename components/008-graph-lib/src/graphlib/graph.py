@@ -1,5 +1,6 @@
 from typing import Dict, List, Set, Tuple, Optional, Any, Union
 
+
 class Graph:
     """
     A base class representing a graph.
@@ -84,7 +85,9 @@ class Graph:
         """
         return self.adj
 
-    def get_adjacency_matrix(self) -> Tuple[List[Any], List[List[Optional[Union[int, float]]]]]:
+    def get_adjacency_matrix(
+        self,
+    ) -> Tuple[List[Any], List[List[Optional[Union[int, float]]]]]:
         """
         Returns the adjacency matrix representation of the graph.
 
@@ -100,7 +103,9 @@ class Graph:
         # Initialize matrix with None (representing no edge)
         # Note: Depending on requirements, 0 or infinity might be used.
         # Here we use None for "no edge", but diagonal is 0.
-        matrix: List[List[Optional[Union[int, float]]]] = [[None for _ in range(size)] for _ in range(size)]
+        matrix: List[List[Optional[Union[int, float]]]] = [
+            [None for _ in range(size)] for _ in range(size)
+        ]
 
         for i in range(size):
             matrix[i][i] = 0
@@ -119,6 +124,7 @@ class DirectedGraph(Graph):
     """
     Represents a directed graph.
     """
+
     def __init__(self, weighted: bool = False) -> None:
         super().__init__(directed=True, weighted=weighted)
 
@@ -127,5 +133,6 @@ class UndirectedGraph(Graph):
     """
     Represents an undirected graph.
     """
+
     def __init__(self, weighted: bool = False) -> None:
         super().__init__(directed=False, weighted=weighted)

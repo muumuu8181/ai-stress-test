@@ -2,6 +2,7 @@ import pytest
 from graphlib.graph import UndirectedGraph, DirectedGraph
 from graphlib.search import bfs, dfs, find_connected_components, has_cycle
 
+
 def test_bfs():
     g = UndirectedGraph()
     g.add_edge(1, 2)
@@ -12,6 +13,7 @@ def test_bfs():
     assert order[0] == 1
     assert set(order[1:3]) == {2, 3}
     assert order[3] == 4
+
 
 def test_dfs():
     g = DirectedGraph()
@@ -26,6 +28,7 @@ def test_dfs():
     idx4 = order.index(4)
     assert idx2 < idx4
 
+
 def test_connected_components():
     g = UndirectedGraph()
     g.add_edge(1, 2)
@@ -39,6 +42,7 @@ def test_connected_components():
     assert {3, 4} in comp_sets
     assert {5} in comp_sets
 
+
 def test_has_cycle_undirected():
     g = UndirectedGraph()
     g.add_edge(1, 2)
@@ -47,6 +51,7 @@ def test_has_cycle_undirected():
     g.add_edge(3, 1)
     assert has_cycle(g)
 
+
 def test_has_cycle_directed():
     g = DirectedGraph()
     g.add_edge(1, 2)
@@ -54,6 +59,7 @@ def test_has_cycle_directed():
     assert not has_cycle(g)
     g.add_edge(3, 1)
     assert has_cycle(g)
+
 
 def test_has_cycle_directed_no_cycle_back_edge():
     g = DirectedGraph()

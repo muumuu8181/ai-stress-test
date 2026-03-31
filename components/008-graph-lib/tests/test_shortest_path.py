@@ -2,6 +2,7 @@ import pytest
 from graphlib.graph import DirectedGraph, UndirectedGraph
 from graphlib.shortest_path import dijkstra, bellman_ford
 
+
 def test_dijkstra():
     g = DirectedGraph(weighted=True)
     g.add_edge(1, 2, 1)
@@ -17,6 +18,7 @@ def test_dijkstra():
     assert distances[4] == 6
     assert predecessors[4] == 3
 
+
 def test_bellman_ford():
     g = DirectedGraph(weighted=True)
     g.add_edge(1, 2, 1)
@@ -28,6 +30,7 @@ def test_bellman_ford():
     distances, predecessors = bellman_ford(g, 1)
     assert distances[4] == 6
 
+
 def test_bellman_ford_negative_weights():
     g = DirectedGraph(weighted=True)
     g.add_edge(1, 2, 10)
@@ -36,6 +39,7 @@ def test_bellman_ford_negative_weights():
 
     distances, _ = bellman_ford(g, 1)
     assert distances[3] == 5
+
 
 def test_bellman_ford_negative_cycle():
     g = DirectedGraph(weighted=True)

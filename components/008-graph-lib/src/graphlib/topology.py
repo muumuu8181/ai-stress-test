@@ -2,6 +2,7 @@ from typing import Any, List, Deque
 from collections import deque
 from .graph import Graph
 
+
 def topological_sort(graph: Graph) -> List[Any]:
     """
     Performs a topological sort on a Directed Acyclic Graph (DAG).

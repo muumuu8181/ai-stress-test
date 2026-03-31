@@ -1,6 +1,7 @@
 from typing import Any, List, Tuple, Dict, Union
 from .graph import Graph
 
+
 class UnionFind:
     def __init__(self, elements: List[Any]):
         self.parent = {el: el for el in elements}
@@ -23,6 +24,7 @@ class UnionFind:
             else:
                 self.parent[root_i] = root_j
                 self.rank[root_j] += 1
+
 
 def kruskal(graph: Graph) -> List[Tuple[Any, Any, Union[int, float]]]:
     """
@@ -58,6 +60,7 @@ def kruskal(graph: Graph) -> List[Tuple[Any, Any, Union[int, float]]]:
             mst.append((u, v, weight))
 
     return mst
+
 
 def prim(graph: Graph) -> List[Tuple[Any, Any, Union[int, float]]]:
     """
