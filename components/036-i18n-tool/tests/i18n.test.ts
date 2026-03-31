@@ -70,6 +70,12 @@ describe('I18n Class', () => {
       i18n.setLocale('en-GB');
       expect(i18n.t('hello')).toBe('Hello from en');
     });
+
+    it('should support stepwise fallback chain (e.g., zh-Hant-TW -> zh-Hant -> zh)', () => {
+      i18n.loadTranslations('zh-Hant', { stepwise: 'Stepwise' });
+      i18n.setLocale('zh-Hant-TW');
+      expect(i18n.t('stepwise')).toBe('Stepwise');
+    });
   });
 
   describe('Interpolation', () => {
@@ -143,6 +149,29 @@ describe('I18n Class', () => {
       i18n.loadTranslations('en-US', { nested: { more: 'Deep' } });
       expect(i18n.t('nested.world')).toBe('World');
       expect(i18n.t('nested.more')).toBe('Deep');
+    });
+
+    it('should prevent prototype pollution during deep merge', () => {
+      const payload = JSON.parse('{"__proto__": {"polluted": "yes"}}');
+      i18n.loadTranslations('en', payload);
+      // @ts-ignore
+      expect({}.polluted).toBeUndefined();
+    });
+
+    it('should handle merging object over existing string', () => {
+      i18n.loadTranslations('en', { hello: { nested: 'Nested' } });
+      expect(i18n.t('hello.nested')).toBe('Nested');
+    });
+
+    it('should validate locales and fallback to en if default is invalid', () => {
+      const i18nBad = new I18n({ defaultLocale: 'invalid_locale' });
+      expect(i18nBad.getLocale()).toBe('en');
+    });
+
+    it('should ignore invalid locales in setLocale', () => {
+      const current = i18n.getLocale();
+      i18n.setLocale('very-bad-locale');
+      expect(i18n.getLocale()).toBe(current);
     });
   });
 });

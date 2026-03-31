@@ -9,6 +9,7 @@ import {
  */
 export class I18n {
   private currentLocale: string;
+  private defaultLocale: string;
   private fallbackLocale: string | undefined;
   private translations: Map<string, TranslationResource> = new Map();
   private pluralRules: Map<string, Intl.PluralRules> = new Map();
@@ -18,8 +19,12 @@ export class I18n {
    * @param options I18n configuration options.
    */
   constructor(options: I18nOptions) {
-    this.currentLocale = options.defaultLocale;
-    this.fallbackLocale = options.fallbackLocale;
+    this.defaultLocale = this.isValidLocale(options.defaultLocale) ? options.defaultLocale : 'en';
+    this.currentLocale = this.defaultLocale;
+    this.fallbackLocale = options.fallbackLocale && this.isValidLocale(options.fallbackLocale)
+      ? options.fallbackLocale
+      : undefined;
+
     if (options.translations) {
       for (const [locale, resource] of Object.entries(options.translations)) {
         this.loadTranslations(locale, resource);
@@ -28,11 +33,27 @@ export class I18n {
   }
 
   /**
+   * Validates a locale tag.
+   * @param locale Locale tag to validate.
+   * @returns True if valid, false otherwise.
+   */
+  private isValidLocale(locale: string): boolean {
+    try {
+      Intl.getCanonicalLocales(locale);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /**
    * Sets the current locale.
    * @param locale Locale code (e.g., 'en-US').
    */
   setLocale(locale: string): void {
-    this.currentLocale = locale;
+    if (this.isValidLocale(locale)) {
+      this.currentLocale = locale;
+    }
   }
 
   /**
@@ -55,24 +76,36 @@ export class I18n {
 
   /**
    * Deep merges two translation resources.
+   * Merges only own properties and prevents prototype pollution.
    * @param target The target resource.
    * @param source The source resource.
    * @returns The merged resource.
    */
   private deepMerge(target: TranslationResource, source: TranslationResource): TranslationResource {
-    const result: TranslationResource = { ...target };
-    for (const key in source) {
+    // If target is not an object, start with an empty object to avoid spreading strings/primitives
+    const result: TranslationResource = (target !== null && typeof target === 'object' && !Array.isArray(target))
+      ? { ...target }
+      : {};
+
+    const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
+
+    for (const key of Object.keys(source)) {
+      if (dangerousKeys.includes(key)) continue;
+
+      const sourceValue = source[key];
+      const targetValue = result[key];
+
       if (
-        source[key] !== null &&
-        typeof source[key] === 'object' &&
-        !Array.isArray(source[key])
+        sourceValue !== null &&
+        typeof sourceValue === 'object' &&
+        !Array.isArray(sourceValue)
       ) {
         result[key] = this.deepMerge(
-          (result[key] as TranslationResource) || {},
-          source[key] as TranslationResource
+          (targetValue as TranslationResource) || {},
+          sourceValue as TranslationResource
         );
       } else {
-        result[key] = source[key];
+        result[key] = sourceValue;
       }
     }
     return result;
@@ -102,18 +135,21 @@ export class I18n {
 
   /**
    * Generates a fallback chain for a given locale.
-   * e.g., 'en-US' -> ['en-US', 'en', fallbackLocale]
+   * e.g., 'zh-Hant-TW' -> ['zh-Hant-TW', 'zh-Hant', 'zh', fallbackLocale]
    * @param locale The starting locale.
    * @returns An array of locales to try in order.
    */
   private getFallbackChain(locale: string): string[] {
-    const chain = [locale];
-    if (locale.includes('-')) {
-      const baseLocale = locale.split('-')[0];
-      if (baseLocale !== locale) {
-        chain.push(baseLocale);
-      }
+    const chain: string[] = [];
+    let current = locale;
+
+    while (current) {
+      chain.push(current);
+      const lastDashIndex = current.lastIndexOf('-');
+      if (lastDashIndex === -1) break;
+      current = current.substring(0, lastDashIndex);
     }
+
     if (this.fallbackLocale && !chain.includes(this.fallbackLocale)) {
       chain.push(this.fallbackLocale);
     }
