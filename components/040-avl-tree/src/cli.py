@@ -1,5 +1,13 @@
 import sys
-from avl_tree import AVLTree
+import os
+
+# Add the current directory to sys.path to support both direct execution and module execution
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+try:
+    from avl_tree import AVLTree
+except ImportError:
+    from src.avl_tree import AVLTree
 
 
 def print_tree(node, indent="", last=True):
