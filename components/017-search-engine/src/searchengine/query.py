@@ -6,7 +6,8 @@ from .tokenizer import Tokenizer
 
 class QueryParser:
     """
-    Parses complex queries including Boolean operators, phrase search, and wildcards.
+    Parses queries including Boolean operators (AND, OR, NOT), phrase search, and wildcards.
+    Note: Currently supports simple linear evaluation of Boolean operators.
     """
 
     def __init__(self, index: InvertedIndex, ranker: Ranker):
@@ -18,29 +19,29 @@ class QueryParser:
         """
         Executes a search query and returns ranked results with metadata.
         """
-        if not query.strip():
+        if not query or not query.strip():
             return []
 
-        # Extract phrases
+        # 1. Extract phrases and wildcards
         phrases = re.findall(r'"([^"]+)"', query)
-
-        # Extract wildcards
-        prefixes = re.findall(r'(\w+)\*', query)
-        suffixes = re.findall(r'\*(\w+)', query)
-
-        # Remaining terms for boolean/simple search
-        clean_query = query
+        temp_query = query
         for p in phrases:
-            clean_query = clean_query.replace(f'"{p}"', ' ')
+            temp_query = temp_query.replace(f'"{p}"', ' ')
+
+        prefixes = re.findall(r'(\w+)\*', temp_query)
+        suffixes = re.findall(r'\*(\w+)', temp_query)
+
+        clean_query = temp_query
         for p in prefixes:
             clean_query = clean_query.replace(f'{p}*', ' ')
         for s in suffixes:
             clean_query = clean_query.replace(f'*{s}', ' ')
 
+        # 2. Process Boolean operators linearly
         tokens = clean_query.split()
 
         must_not_docs = set()
-        must_docs = set()
+        must_docs = None # Start as None to distinguish from empty set
         or_docs = set()
 
         search_terms = []
@@ -56,22 +57,24 @@ class QueryParser:
                 or_docs |= self._get_docs_with_term(or_term)
                 search_terms.append(or_term)
                 i += 2
-            elif token == "AND":
+            elif token == "AND" and i + 1 < len(tokens):
+                # Explicit AND just moves to next term
                 i += 1
             else:
                 term = tokens[i].lower()
                 term_docs = self._get_docs_with_term(term)
                 search_terms.append(term)
-                if not must_docs and len(search_terms) == 1:
+                if must_docs is None:
                      must_docs = term_docs
                 else:
                      must_docs &= term_docs
                 i += 1
 
+        # 3. Combine results
         candidate_docs = set(self.index.documents.keys())
         has_positive_filter = False
 
-        if tokens:
+        if must_docs is not None:
             candidate_docs &= must_docs
             has_positive_filter = True
 
@@ -105,31 +108,28 @@ class QueryParser:
 
         candidate_docs -= must_not_docs
 
-        # Rank candidates
+        # 4. Rank and format
         ranked_docs = self.ranker.score(search_terms, candidate_docs)
 
-        # Format results
         results = []
         for doc_id, score in ranked_docs:
             text = self.index.documents[doc_id]
             highlighted = self.highlight(text, search_terms)
             results.append({
-                "id": doc_id,
-                "score": score,
-                "text": text,
-                "highlighted": highlighted
+                "id": doc_id, "score": score, "text": text, "highlighted": highlighted
             })
-
         return results
 
     def _get_docs_with_term(self, term: str) -> Set[str]:
-        postings = self.index.get_postings(term)
+        postings = self.index.get_postings(term.lower())
         return set(postings.keys())
 
     def _phrase_search(self, phrase: str) -> Set[str]:
+        """Brute-force phrase search for robustness in this simple engine."""
         matches = set()
+        phrase_lower = phrase.lower()
         for doc_id, text in self.index.documents.items():
-            if phrase.lower() in text.lower():
+            if phrase_lower in text.lower():
                 matches.add(doc_id)
         return matches
 
@@ -150,10 +150,17 @@ class QueryParser:
         return matches
 
     def highlight(self, text: str, query_terms: List[str]) -> str:
-        if not query_terms:
-            return text
-        sorted_terms = sorted(set(t for t in query_terms if t), key=len, reverse=True)
-        if not sorted_terms:
-            return text
+        """Wraps search terms in <mark> tags."""
+        if not query_terms: return text
+        all_terms = []
+        for term in query_terms:
+            if not term: continue
+            all_terms.append(term)
+            if ' ' in term: all_terms.extend(term.split())
+
+        # Sort by length descending to match longer phrases first
+        sorted_terms = sorted(set(t for t in all_terms if t), key=len, reverse=True)
+        if not sorted_terms: return text
+
         pattern = re.compile('|'.join(re.escape(t) for t in sorted_terms), re.IGNORECASE)
         return pattern.sub(lambda m: f"<mark>{m.group()}</mark>", text)
