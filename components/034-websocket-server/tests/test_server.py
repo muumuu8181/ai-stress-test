@@ -499,6 +499,14 @@ async def test_server_fragmentation():
     await asyncio.sleep(0.1)
     assert received == ["Hello beautiful world"]
 
+    # Test split-UTF-8 characters
+    # 𠜎 is 4 bytes: F0 A0 9C 8E
+    writer.write(encode_frame(Opcode.TEXT, b"\xF0\xA0", fin=False, mask=True))
+    writer.write(encode_frame(Opcode.CONTINUATION, b"\x9C\x8E", fin=True, mask=True))
+    await writer.drain()
+    await asyncio.sleep(0.1)
+    assert received[-1] == "𠜎"
+
     writer.close()
     await writer.wait_closed()
     server.close()

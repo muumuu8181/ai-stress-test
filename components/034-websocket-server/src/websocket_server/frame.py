@@ -109,7 +109,7 @@ def decode_frame(data: bytes, from_client: bool = True) -> Tuple[Frame, int]:
     if masking_key:
         payload = bytes(b ^ masking_key[i % 4] for i, b in enumerate(payload))
 
-    if opcode == Opcode.TEXT:
+    if opcode == Opcode.TEXT and fin:
         try:
             payload = payload.decode("utf-8")
         except UnicodeDecodeError:
