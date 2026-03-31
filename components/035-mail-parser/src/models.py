@@ -47,6 +47,6 @@ class MailMessage:
     from_address: str = ""
     to_addresses: List[str] = field(default_factory=list)
     date: str = ""
-    headers: Dict[str, str] = field(default_factory=dict)
+    headers: Dict[str, List[str]] = field(default_factory=dict)
     content: EmailContent = field(default_factory=EmailContent)
     attachments: List[Attachment] = field(default_factory=list)

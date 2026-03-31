@@ -110,3 +110,42 @@ def test_nested_multiparts():
     assert len(mail.attachments) == 1
     assert mail.attachments[0].filename == "img.png"
     assert mail.attachments[0].content_type == "image/png"
+
+def test_repeated_headers():
+    raw_email = (
+        "Received: from a.com\r\n"
+        "Received: from b.com\r\n"
+        "Subject: Multi-headers\r\n\r\n"
+    )
+    mail = MailParser.parse(raw_email)
+    assert len(mail.headers["Received"]) == 2
+    assert "from a.com" in mail.headers["Received"]
+    assert "from b.com" in mail.headers["Received"]
+
+def test_encoded_display_name_with_comma():
+    # =?UTF-8?Q?Doe=2C_John?= is "Doe, John"
+    raw_email = "To: =?UTF-8?Q?Doe=2C_John?= <john@example.com>\r\n\r\n"
+    mail = MailParser.parse(raw_email)
+    assert mail.to_addresses == ["Doe, John <john@example.com>"]
+
+def test_rfc822_attachment():
+    raw_email = (
+        "Subject: Outer email\r\n"
+        "Content-Type: multipart/mixed; boundary=outer\r\n\r\n"
+        "--outer\r\n"
+        "Content-Type: text/plain\r\n\r\n"
+        "Outer body text\r\n"
+        "--outer\r\n"
+        "Content-Type: message/rfc822\r\n"
+        "Content-Disposition: attachment; filename=\"inner.eml\"\r\n\r\n"
+        "Subject: Inner email\r\n"
+        "Content-Type: text/plain\r\n\r\n"
+        "Inner body text\r\n"
+        "--outer--"
+    )
+    mail = MailParser.parse(raw_email)
+    # The outer body should NOT be overwritten by the inner body
+    assert mail.content.text == "Outer body text"
+    assert len(mail.attachments) == 1
+    assert mail.attachments[0].filename == "inner.eml"
+    assert b"Inner body text" in mail.attachments[0].content

@@ -39,7 +39,11 @@ class MailParser:
         mail_message.date = msg.get("Date", "")
 
         for key, value in msg.items():
-            mail_message.headers[key] = MailParser._decode_mime_header(value)
+            decoded_val = MailParser._decode_mime_header(value)
+            if key in mail_message.headers:
+                mail_message.headers[key].append(decoded_val)
+            else:
+                mail_message.headers[key] = [decoded_val]
 
         # Parse body and attachments
         MailParser._parse_payload(msg, mail_message)
@@ -70,21 +74,53 @@ class MailParser:
         if not address_header:
             return []
 
-        # We decode the header first because getaddresses expects a string
-        # which might contain MIME encoded words
-        decoded_header = MailParser._decode_mime_header(address_header)
-        addresses = getaddresses([decoded_header])
-        return [formataddr(addr) for addr in addresses]
+        # Parse the raw header first to avoid delimiter semantic changes
+        addresses = getaddresses([address_header])
+        result = []
+        for name, addr in addresses:
+            decoded_name = MailParser._decode_mime_header(name)
+            if decoded_name:
+                result.append(f"{decoded_name} <{addr}>")
+            else:
+                result.append(addr)
+        return result
 
     @staticmethod
     def _parse_payload(msg: Message, mail_message: MailMessage) -> None:
         """Recursively parses the email payload for body content and attachments."""
         if msg.is_multipart():
-            for part in msg.walk():
-                # skip the multipart container itself
-                if part.get_content_maintype() == 'multipart':
+            # msg.walk() returns the message itself as the first part.
+            # We want to skip it if it's multipart/mixed etc. to avoid duplicate processing.
+            # However, we must be careful with nested message/rfc822.
+
+            # Use an explicit set to track parts we've already handled or parts within handled rfc822.
+            parts_list = list(msg.walk())
+            handled_parts = set()
+
+            for i, part in enumerate(parts_list):
+                if id(part) in handled_parts:
                     continue
+
+                content_type = part.get_content_type()
+                is_rfc822 = content_type == 'message/rfc822'
+                is_multipart = part.get_content_maintype() == 'multipart'
+
+                if is_multipart:
+                    handled_parts.add(id(part))
+                    continue
+
+                # If it's an attached rfc822, we handle it as an attachment and don't descend.
+                if is_rfc822 and (part.get_filename() or part.get_content_disposition() == 'attachment'):
+                    MailParser._process_single_part(part, mail_message)
+                    handled_parts.add(id(part))
+                    # Mark all children of this rfc822 as handled.
+                    # msg.walk() on this part would yield the part and its children.
+                    for child in part.walk():
+                        handled_parts.add(id(child))
+                    continue
+
                 MailParser._process_single_part(part, mail_message)
+                handled_parts.add(id(part))
         else:
             MailParser._process_single_part(msg, mail_message)
 
@@ -97,7 +133,10 @@ class MailParser:
 
         # If it has a filename or is marked as attachment, treat it as an attachment
         if filename or disposition == 'attachment':
-            payload = part.get_payload(decode=True)
+            if content_type == 'message/rfc822':
+                payload = part.get_payload(0).as_bytes()
+            else:
+                payload = part.get_payload(decode=True)
             if payload is not None:
                 filename = MailParser._decode_mime_header(filename) if filename else "unnamed"
                 mail_message.attachments.append(Attachment(

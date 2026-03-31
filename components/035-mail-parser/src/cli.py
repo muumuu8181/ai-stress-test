@@ -50,13 +50,25 @@ def main() -> None:
 
         if args.attachments:
             os.makedirs(args.attachments, exist_ok=True)
+            used_filenames = set()
             for att in mail.attachments:
-                filename = att.filename or "unnamed"
+                original_filename = att.filename or "unnamed"
                 # Basic sanitization for filename
-                filename = "".join(c for c in filename if c.isalnum() or c in ('.', '_', '-')).strip()
-                if not filename:
-                    filename = "unnamed"
+                base_name = "".join(c for c in original_filename if c.isalnum() or c in ('.', '_', '-')).strip()
+                if not base_name:
+                    base_name = "unnamed"
 
+                filename = base_name
+                counter = 1
+                while filename.lower() in used_filenames:
+                    name_parts = base_name.rsplit('.', 1)
+                    if len(name_parts) > 1:
+                        filename = f"{name_parts[0]}_{counter}.{name_parts[1]}"
+                    else:
+                        filename = f"{base_name}_{counter}"
+                    counter += 1
+
+                used_filenames.add(filename.lower())
                 path = os.path.join(args.attachments, filename)
                 with open(path, 'wb') as f:
                     f.write(att.content)
