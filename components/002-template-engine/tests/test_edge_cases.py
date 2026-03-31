@@ -9,7 +9,6 @@ def test_empty_template():
 def test_null_value():
     env = Environment()
     template = Template("Value: {{ val }}", env)
-    # Our engine now correctly handles None
     assert template.render(val=None) == "Value: None"
 
 def test_nested_attribute_error():
@@ -35,3 +34,17 @@ def test_complex_expression():
     # name | upper | safe
     template = Template("{{ name | upper | safe }}", env)
     assert template.render(name="<alice>") == "<ALICE>"
+
+def test_boolean_logic():
+    env = Environment()
+    assert Template("{% if True and True %}YES{% endif %}", env).render() == "YES"
+    assert Template("{% if True and False %}YES{% else %}NO{% endif %}", env).render() == "NO"
+    assert Template("{% if False or True %}YES{% endif %}", env).render() == "YES"
+    assert Template("{% if not False %}YES{% endif %}", env).render() == "YES"
+    assert Template("{% if 10 > 5 and 5 < 10 %}YES{% endif %}", env).render() == "YES"
+
+def test_comparison_in_strings():
+    env = Environment()
+    # Ensure operators inside strings don't break splitting
+    assert Template("{% if val == '==' %}YES{% endif %}", env).render(val="==") == "YES"
+    assert Template("{% if val != '!=' %}NO{% else %}YES{% endif %}", env).render(val="!=") == "YES"
