@@ -204,12 +204,24 @@ class Parser:
         ranges = []
 
         while self.peek().type != TokenType.RBRACKET and self.peek().type != TokenType.EOF:
-            # Special case for hyphen at start
-            start_char_token = self.advance()
-            if start_char_token.type == TokenType.EOF:
+            token = self.advance()
+            if token.type == TokenType.EOF:
                 raise ValueError("Unterminated character class")
 
-            start_char = start_char_token.value
+            if token.type == TokenType.ESCAPED and token.value in ('d', 'w', 's'):
+                # Expand shorthand classes inside []
+                if token.value == 'd':
+                    ranges.append(('0', '9'))
+                elif token.value == 'w':
+                    chars.append('_')
+                    ranges.append(('a', 'z'))
+                    ranges.append(('A', 'Z'))
+                    ranges.append(('0', '9'))
+                elif token.value == 's':
+                    chars.extend([' ', '\t', '\n', '\r', '\f', '\v'])
+                continue
+
+            start_char = token.value
 
             if self.peek().type == TokenType.LITERAL and self.peek().value == '-':
                 # Potential range
