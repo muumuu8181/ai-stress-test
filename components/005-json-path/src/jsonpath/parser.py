@@ -75,18 +75,27 @@ class Parser:
         while self.peek().type != TokenType.RIGHT_BRACKET:
             token = self.peek()
             if token.type == TokenType.NUMBER:
-                start = self.consume(TokenType.NUMBER).value
+                val = self.consume(TokenType.NUMBER).value
+                if not isinstance(val, int):
+                    raise ValueError(f"Array index must be an integer, got {val} at {token.pos}")
+                start = val
                 if self.peek().type == TokenType.COLON:
                     self.consume(TokenType.COLON)
                     stop = None
                     if self.peek().type == TokenType.NUMBER:
-                        stop = self.consume(TokenType.NUMBER).value
+                        stop_val = self.consume(TokenType.NUMBER).value
+                        if not isinstance(stop_val, int):
+                            raise ValueError(f"Slice stop must be an integer, got {stop_val}")
+                        stop = stop_val
 
                     step = None
                     if self.peek().type == TokenType.COLON:
                         self.consume(TokenType.COLON)
                         if self.peek().type == TokenType.NUMBER:
-                            step = self.consume(TokenType.NUMBER).value
+                            step_val = self.consume(TokenType.NUMBER).value
+                            if not isinstance(step_val, int):
+                                raise ValueError(f"Slice step must be an integer, got {step_val}")
+                            step = step_val
                     selectors.append(SliceNode(start, stop, step))
                 else:
                     selectors.append(IndexNode(start))
@@ -109,11 +118,13 @@ class Parser:
                 selectors.append(WildcardNode())
             elif token.type == TokenType.FILTER_START:
                 selectors.append(self.parse_filter())
+            else:
+                raise ValueError(f"Unexpected token in bracket: {token.type} at {token.pos}")
 
             if self.peek().type == TokenType.COMMA:
                 self.consume(TokenType.COMMA)
             elif self.peek().type != TokenType.RIGHT_BRACKET:
-                 # If not comma and not right bracket, might be multiple selectors like [0,1]
+                 # If not comma and not right bracket, we expect a right bracket next loop or it will fail in the 'else' above
                  pass
 
         self.consume(TokenType.RIGHT_BRACKET)
