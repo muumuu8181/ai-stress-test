@@ -220,6 +220,8 @@ class Runner:
         Executes a single task's commands.
         """
         if self.dry_run:
+            if not task.commands:
+                print("  (dry-run) <no commands>")
             for cmd in task.commands:
                 print(f"  (dry-run) {cmd}")
             return True
