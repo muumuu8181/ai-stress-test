@@ -1,6 +1,5 @@
 import argparse
-import sys
-from .canvas import Canvas
+from src.canvas import Canvas
 
 
 def main():

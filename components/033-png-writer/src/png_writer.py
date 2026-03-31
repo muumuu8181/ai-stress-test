@@ -1,6 +1,5 @@
 import struct
 import zlib
-from typing import List
 
 
 def create_chunk(chunk_type: bytes, data: bytes) -> bytes:
@@ -93,13 +92,16 @@ def generate_png(width: int, height: int, rgb_data: bytes) -> bytes:
     Generates a complete PNG image byte stream.
 
     Args:
-        width: Image width.
-        height: Image height.
+        width: Image width. Must be positive.
+        height: Image height. Must be positive.
         rgb_data: Raw RGB pixel data. Must have length width * height * 3.
 
     Returns:
         The complete PNG byte stream.
     """
+    if width <= 0 or height <= 0:
+        raise ValueError("width and height must be positive")
+
     if len(rgb_data) != width * height * 3:
         raise ValueError(
             f"rgb_data length {len(rgb_data)} does not match width {width} * height {height} * 3"

@@ -1,5 +1,8 @@
 import pytest
 from src.canvas import Canvas
+from src.cli import main
+import sys
+from unittest.mock import patch
 
 
 def test_canvas_init():
@@ -96,3 +99,21 @@ def test_to_png_integration():
     assert b"IHDR" in png_bytes
     assert b"IDAT" in png_bytes
     assert b"IEND" in png_bytes
+
+
+def test_cli_demo(tmp_path):
+    output_file = tmp_path / "test_demo.png"
+    test_args = ["prog", "--demo", "--output", str(output_file), "--width", "10", "--height", "10"]
+    with patch.object(sys, "argv", test_args):
+        main()
+    assert output_file.exists()
+    assert output_file.read_bytes().startswith(b"\x89PNG")
+
+
+def test_cli_empty(tmp_path):
+    output_file = tmp_path / "test_empty.png"
+    test_args = ["prog", "--output", str(output_file), "--width", "10", "--height", "10"]
+    with patch.object(sys, "argv", test_args):
+        main()
+    assert output_file.exists()
+    assert output_file.read_bytes().startswith(b"\x89PNG")

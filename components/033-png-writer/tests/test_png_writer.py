@@ -82,3 +82,10 @@ def test_generate_png_basic():
 def test_generate_png_invalid_data_length():
     with pytest.raises(ValueError, match="rgb_data length"):
         generate_png(2, 2, b"\x00" * 10)  # Should be 12 bytes
+
+
+def test_generate_png_invalid_dimensions():
+    with pytest.raises(ValueError, match="width and height must be positive"):
+        generate_png(0, 10, b"")
+    with pytest.raises(ValueError, match="width and height must be positive"):
+        generate_png(10, 0, b"")
