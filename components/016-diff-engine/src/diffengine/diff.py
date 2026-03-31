@@ -1,4 +1,4 @@
-from typing import List, Tuple, TypeVar, Optional, Dict
+from typing import List, Tuple, Optional, Dict, TypeVar
 from .lcs import get_lcs_matrix
 import os
 
@@ -113,7 +113,7 @@ def get_directory_diff(dir_a: str, dir_b: str) -> Dict[str, str]:
     for f in common:
         path_a = os.path.join(dir_a, f)
         path_b = os.path.join(dir_b, f)
-        with open(path_a, "r", encoding="utf-8") as fa, open(path_b, "r", encoding="utf-8") as fb:
+        with open(path_a, "rb") as fa, open(path_b, "rb") as fb:
             if fa.read() != fb.read():
                 diffs[f] = "modified"
 

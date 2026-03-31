@@ -1,6 +1,5 @@
 from typing import List, Dict, Tuple
 from .diff import DiffOp
-import datetime
 
 def format_unified(ops: List[DiffOp], source_file: str = "source", target_file: str = "target", context: int = 3) -> str:
     """
@@ -19,17 +18,13 @@ def format_unified(ops: List[DiffOp], source_file: str = "source", target_file: 
         return f"--- {source_file}\n+++ {target_file}\n"
 
     lines = []
-    lines.append(f"--- {source_file}")
-    lines.append(f"+++ {target_file}")
-
-    # Group ops into hunks
-    hunks = []
-    current_hunk_ops = []
+    lines.append(f"--- {source_file}\n")
+    lines.append(f"+++ {target_file}\n")
 
     changed_indices = [i for i, op in enumerate(ops) if op.op != DiffOp.EQUAL]
 
     if not changed_indices:
-        return "".join(lines) if all(l.endswith('\n') for l in lines) else "\n".join(lines)
+        return "".join(lines)
 
     hunk_ranges = []
     if changed_indices:
@@ -39,7 +34,6 @@ def format_unified(ops: List[DiffOp], source_file: str = "source", target_file: 
         for i in range(1, len(changed_indices)):
             idx = changed_indices[i]
             if idx - context < end:
-                # Overlap or touch, extend current range
                 end = min(len(ops), idx + context + 1)
             else:
                 hunk_ranges.append((start, end))
@@ -66,17 +60,20 @@ def format_unified(ops: List[DiffOp], source_file: str = "source", target_file: 
         s_count = sum(1 for op in hunk_ops if op.op != DiffOp.INSERT)
         t_count = sum(1 for op in hunk_ops if op.op != DiffOp.DELETE)
 
-        lines.append(f"@@ -{s_start},{s_count} +{t_start},{t_count} @@")
+        lines.append(f"@@ -{s_start},{s_count} +{t_start},{t_count} @@\n")
 
         for op in hunk_ops:
+            val = op.value
+            if not val.endswith('\n'):
+                val += '\n'
             if op.op == DiffOp.EQUAL:
-                lines.append(f" {op.value}")
+                lines.append(f" {val}")
             elif op.op == DiffOp.DELETE:
-                lines.append(f"-{op.value}")
+                lines.append(f"-{val}")
             elif op.op == DiffOp.INSERT:
-                lines.append(f"+{op.value}")
+                lines.append(f"+{val}")
 
-    return "".join(lines) if all(line.endswith('\n') for line in lines) else "\n".join(lines)
+    return "".join(lines)
 
 def format_side_by_side(ops: List[DiffOp], width: int = 40) -> str:
     """
@@ -121,7 +118,6 @@ def format_side_by_side(ops: List[DiffOp], width: int = 40) -> str:
             sep = " >"
             i += 1
 
-        # Basic line truncation
         left_trunc = left[:width].ljust(width)
         right_trunc = right[:width].ljust(width)
         lines.append(f"{left_trunc}{sep}{right_trunc}")

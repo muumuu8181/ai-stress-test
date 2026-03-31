@@ -15,10 +15,6 @@ def test_merge_3way_conflict():
     current = "line1\nmodified1\n"
     other = "line1\nmodified2\n"
 
-    # In my current implementation, "modified1" is a DELETE of "line2" and an INSERT of "modified1".
-    # Same for "modified2".
-    # So it should detect a conflict in insertions before index 1 (or 2).
-
     merged, conflict = merge_3way(ancestor, current, other)
     assert conflict
     assert "<<<<<<< CURRENT" in merged
@@ -45,3 +41,20 @@ def test_merge_3way_same_change():
     merged, conflict = merge_3way(ancestor, current, other)
     assert not conflict
     assert merged == current
+
+def test_merge_3way_modify_delete_conflict():
+    # As requested in the review feedback
+    ancestor = "line1\nline2\nline3\n"
+    current = "line1\nmodified2\nline3\n"
+    other = "line1\nline3\n"
+
+    # Side A modifies line 2, Side B deletes line 2.
+    merged, conflict = merge_3way(ancestor, current, other)
+    # Ideally, this should be a conflict.
+    # In my current implementation, it's a conflict because state_b[1] has ins and kept_b=False,
+    # and state_o[1] has no ins and kept_o=False.
+    # Actually, the insertions logic: ins_b != ins_o (one is ['modified2\n'], other is []).
+    # So it flags a conflict in insertions.
+    assert conflict
+    assert "<<<<<<< CURRENT" in merged
+    assert "modified2" in merged

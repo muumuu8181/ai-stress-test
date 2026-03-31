@@ -61,6 +61,16 @@ other = "their changes"
 merged, conflict = merge_3way(ancestor, current, other)
 ```
 
+### Directory Diff
+
+```python
+from diffengine.diff import get_directory_diff
+
+diffs = get_directory_diff("dir_a", "dir_b")
+for path, status in diffs.items():
+    print(f"{path}: {status}")
+```
+
 ## Testing
 
 Run tests using pytest:
