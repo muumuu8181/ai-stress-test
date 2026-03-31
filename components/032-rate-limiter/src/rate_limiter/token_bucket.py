@@ -21,11 +21,19 @@ class TokenBucketRateLimiter(RateLimiter):
         Args:
             capacity (float): Maximum number of tokens the bucket can hold.
             refill_rate (float): Number of tokens added to the bucket per second.
+
+        Raises:
+            ValueError: If capacity or refill_rate is negative.
         """
+        if capacity < 0:
+            raise ValueError("capacity must be non-negative")
+        if refill_rate < 0:
+            raise ValueError("refill_rate must be non-negative")
+
         self.capacity = capacity
         self.refill_rate = refill_rate
         self.tokens = capacity
-        self.last_refill_time = time.time()
+        self.last_refill_time = time.monotonic()
         self._lock = threading.Lock()
 
     def allow_request(self) -> bool:
@@ -46,7 +54,7 @@ class TokenBucketRateLimiter(RateLimiter):
         """
         Refill the bucket with tokens based on the time elapsed since the last refill.
         """
-        now = time.time()
+        now = time.monotonic()
         elapsed = now - self.last_refill_time
         added_tokens = elapsed * self.refill_rate
         self.tokens = min(self.capacity, self.tokens + added_tokens)

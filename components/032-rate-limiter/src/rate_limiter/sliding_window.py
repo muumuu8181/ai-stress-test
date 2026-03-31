@@ -21,7 +21,15 @@ class SlidingWindowRateLimiter(RateLimiter):
         Args:
             max_requests (int): The maximum number of requests allowed within the window.
             window_seconds (float): The time window in seconds.
+
+        Raises:
+            ValueError: If max_requests is negative or window_seconds is non-positive.
         """
+        if max_requests < 0:
+            raise ValueError("max_requests must be non-negative")
+        if window_seconds <= 0:
+            raise ValueError("window_seconds must be positive")
+
         self.max_requests = max_requests
         self.window_seconds = window_seconds
         self.requests = deque()
@@ -35,7 +43,7 @@ class SlidingWindowRateLimiter(RateLimiter):
             bool: True if the request is within the limit, False otherwise.
         """
         with self._lock:
-            now = time.time()
+            now = time.monotonic()
             self._cleanup(now)
             if len(self.requests) < self.max_requests:
                 self.requests.append(now)
