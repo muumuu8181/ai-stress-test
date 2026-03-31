@@ -131,10 +131,20 @@ def encode_dns_name(name: str) -> bytes:
     return res
 
 
-def decode_dns_name(reader: io.BytesIO, full_data: bytes) -> str:
-    """Decodes a domain name from DNS format, handling compression."""
+def decode_dns_name(
+    reader: io.BytesIO, full_data: bytes, visited: Optional[set] = None
+) -> str:
+    """Decodes a domain name from DNS format, handling compression and pointer cycles."""
+    if visited is None:
+        visited = set()
+
     parts = []
     while True:
+        pos = reader.tell()
+        if pos in visited:
+            raise ValueError("DNS name contains compression pointer cycle")
+        visited.add(pos)
+
         length_byte = reader.read(1)
         if not length_byte:
             break
@@ -147,7 +157,8 @@ def decode_dns_name(reader: io.BytesIO, full_data: bytes) -> str:
             offset = ((length & 0x3F) << 8) | other_byte
             old_pos = reader.tell()
             reader.seek(offset)
-            parts.append(decode_dns_name(reader, full_data))
+            # Pass visited set to recursive call to detect cycles
+            parts.append(decode_dns_name(reader, full_data, visited))
             reader.seek(old_pos)
             break
         else:

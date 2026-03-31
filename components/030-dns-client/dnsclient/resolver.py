@@ -44,20 +44,13 @@ class DNSResolver:
         qtype: int = DNSType.A,
         trace: Optional[ResolutionTrace] = None,
         use_tcp: bool = False,
+        _cname_depth: int = 0,
     ) -> DNSPacket:
-        """Resolves a DNS query recursively."""
+        """Resolves a DNS query recursively with CNAME chasing."""
+        if _cname_depth > 10:
+            raise Exception("CNAME chasing depth exceeded")
 
-        # Check cache
-        cached_answers = self.cache.get(name, qtype)
-        if cached_answers:
-            # Create a dummy packet with cached answers
-            header = DNSHeader(
-                id=random.getrandbits(16), qr=1, rd=1, ra=1, ancount=len(cached_answers)
-            )
-            question = DNSQuestion(name, qtype)
-            return DNSPacket(header, [question], answers=cached_answers)
-
-        # Handle PTR queries for IP addresses
+        # Handle PTR queries for IP addresses and normalize name before cache check
         if qtype == DNSType.PTR:
             try:
                 # Basic check for IPv4
@@ -67,8 +60,20 @@ class DNSResolver:
             except Exception:
                 pass
 
+        # Check cache after normalization
+        cached_answers = self.cache.get(name, qtype)
+        if cached_answers:
+            # Create a dummy packet with cached answers
+            header = DNSHeader(
+                id=random.getrandbits(16), qr=1, rd=1, ra=1, ancount=len(cached_answers)
+            )
+            question = DNSQuestion(name, qtype)
+            return DNSPacket(header, [question], answers=cached_answers)
+
         # Start recursion from root
-        return self._resolve_recursive(name, qtype, ROOT_HINTS, trace, use_tcp)
+        return self._resolve_recursive(
+            name, qtype, ROOT_HINTS, trace, use_tcp, _cname_depth=_cname_depth
+        )
 
     def _resolve_recursive(
         self,
@@ -78,6 +83,7 @@ class DNSResolver:
         trace: Optional[ResolutionTrace] = None,
         use_tcp: bool = False,
         depth: int = 0,
+        _cname_depth: int = 0,
     ) -> DNSPacket:
         """Helper for recursive resolution."""
         if depth > 10:
@@ -115,8 +121,14 @@ class DNSResolver:
             target_ans = [ans for ans in response.answers if ans.type == qtype]
 
             if not target_ans and cname_ans and qtype != DNSType.CNAME:
-                # Follow CNAME
-                return self.resolve(cname_ans[0].rdata, qtype, trace, use_tcp)
+                # Follow CNAME with depth tracking
+                return self.resolve(
+                    cname_ans[0].rdata,
+                    qtype,
+                    trace,
+                    use_tcp,
+                    _cname_depth=_cname_depth + 1,
+                )
             return response
 
         # If we have referrals in authorities
@@ -138,14 +150,20 @@ class DNSResolver:
 
                 if next_ns_ips:
                     return self._resolve_recursive(
-                        name, qtype, next_ns_ips, trace, use_tcp, depth + 1
+                        name,
+                        qtype,
+                        next_ns_ips,
+                        trace,
+                        use_tcp,
+                        depth + 1,
+                        _cname_depth=_cname_depth,
                     )
                 else:
                     # No glue records, must resolve NS names first
                     for ns in ns_records:
                         ns_name = str(ns.rdata)
                         try:
-                            # Resolve the NS name to an IP
+                            # Resolve the NS name to an IP (reset CNAME depth for NS resolution)
                             ns_packet = self.resolve(ns_name, DNSType.A, trace, use_tcp)
                             new_ips = [
                                 str(ans.rdata)
@@ -154,7 +172,13 @@ class DNSResolver:
                             ]
                             if new_ips:
                                 return self._resolve_recursive(
-                                    name, qtype, new_ips, trace, use_tcp, depth + 1
+                                    name,
+                                    qtype,
+                                    new_ips,
+                                    trace,
+                                    use_tcp,
+                                    depth + 1,
+                                    _cname_depth=_cname_depth,
                                 )
                         except Exception:
                             continue
