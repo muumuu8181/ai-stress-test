@@ -1,4 +1,5 @@
 import heapq
+import itertools
 from typing import Any, Dict, List, Optional, Union, Tuple
 from .graph import Graph
 
@@ -28,10 +29,11 @@ def dijkstra(
     predecessors: Dict[Any, Optional[Any]] = {node: None for node in graph.vertices}
     distances[start_node] = 0
 
-    pq = [(0, start_node)]
+    counter = itertools.count()
+    pq = [(0, next(counter), start_node)]
 
     while pq:
-        current_distance, u = heapq.heappop(pq)
+        current_distance, _, u = heapq.heappop(pq)
 
         if current_distance > distances[u]:
             continue
@@ -42,7 +44,7 @@ def dijkstra(
             if distance < distances[v]:
                 distances[v] = distance
                 predecessors[v] = u
-                heapq.heappush(pq, (distance, v))
+                heapq.heappush(pq, (distance, next(counter), v))
 
     return distances, predecessors
 

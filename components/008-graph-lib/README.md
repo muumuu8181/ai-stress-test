@@ -20,7 +20,7 @@ Add the `src` directory to your `PYTHONPATH`.
 ### 1. Creating a Graph
 
 ```python
-from graphlib import DirectedGraph, UndirectedGraph
+from graph_algo import DirectedGraph, UndirectedGraph
 
 # Directed Weighted Graph
 g = DirectedGraph(weighted=True)
@@ -36,7 +36,7 @@ print(matrix)  # [[0, 5, None], [None, 0, 3], [None, None, 0]]
 ### 2. Search Algorithms
 
 ```python
-from graphlib import bfs, dfs, has_cycle
+from graph_algo import bfs, dfs, has_cycle
 
 g = UndirectedGraph()
 g.add_edge(1, 2)
@@ -49,7 +49,7 @@ print(has_cycle(g))   # False
 ### 3. Shortest Path
 
 ```python
-from graphlib import dijkstra, bellman_ford
+from graph_algo import dijkstra, bellman_ford
 
 g = DirectedGraph(weighted=True)
 g.add_edge('A', 'B', 1)
@@ -63,7 +63,7 @@ print(distances['C'])  # 3
 ### 4. Minimum Spanning Tree (MST)
 
 ```python
-from graphlib import UndirectedGraph, kruskal, prim
+from graph_algo import UndirectedGraph, kruskal, prim
 
 g = UndirectedGraph(weighted=True)
 g.add_edge('A', 'B', 1)
@@ -77,7 +77,7 @@ print(mst)  # [('A', 'B', 1), ('A', 'C', 2)]
 ### 5. Topological Sort
 
 ```python
-from graphlib import DirectedGraph, topological_sort
+from graph_algo import DirectedGraph, topological_sort
 
 g = DirectedGraph()
 g.add_edge('A', 'B')

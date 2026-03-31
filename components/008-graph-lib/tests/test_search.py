@@ -1,6 +1,6 @@
 import pytest
-from graphlib.graph import UndirectedGraph, DirectedGraph
-from graphlib.search import bfs, dfs, find_connected_components, has_cycle
+from graph_algo.graph import UndirectedGraph, DirectedGraph
+from graph_algo.search import bfs, dfs, find_connected_components, has_cycle
 
 
 def test_bfs():

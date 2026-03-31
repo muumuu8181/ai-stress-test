@@ -1,6 +1,6 @@
 import pytest
-from graphlib.graph import UndirectedGraph
-from graphlib.mst import kruskal, prim
+from graph_algo.graph import UndirectedGraph
+from graph_algo.mst import kruskal, prim
 
 
 def test_kruskal():

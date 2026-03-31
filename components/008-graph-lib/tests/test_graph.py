@@ -1,5 +1,5 @@
 import pytest
-from graphlib.graph import Graph, DirectedGraph, UndirectedGraph
+from graph_algo.graph import Graph, DirectedGraph, UndirectedGraph
 
 
 def test_graph_add_vertex():

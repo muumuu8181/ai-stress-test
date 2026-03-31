@@ -1,3 +1,5 @@
+import heapq
+import itertools
 from typing import Any, List, Tuple, Dict, Union
 from .graph import Graph
 
@@ -44,10 +46,17 @@ def kruskal(graph: Graph) -> List[Tuple[Any, Any, Union[int, float]]]:
     for u in graph.adj:
         for v, weight in graph.adj[u].items():
             # Use a canonical order to avoid duplicates in undirected graph
-            edge = tuple(sorted((u, v))) + (weight,)
-            if edge not in seen_edges:
+            # sorted((u, v)) might fail with heterogeneous types, so use a more robust key
+            u_key = (str(type(u)), str(u))
+            v_key = (str(type(v)), str(v))
+            if u_key < v_key:
+                canonical_edge = (u, v, weight)
+            else:
+                canonical_edge = (v, u, weight)
+
+            if canonical_edge not in seen_edges:
                 edges.append((u, v, weight))
-                seen_edges.add(edge)
+                seen_edges.add(canonical_edge)
 
     edges.sort(key=lambda x: x[2])
 
@@ -72,8 +81,6 @@ def prim(graph: Graph) -> List[Tuple[Any, Any, Union[int, float]]]:
     Returns:
         A list of edges (u, v, weight) that form the MST.
     """
-    import heapq
-
     if graph.directed:
         raise ValueError("Prim's algorithm is for undirected graphs")
 
@@ -84,19 +91,20 @@ def prim(graph: Graph) -> List[Tuple[Any, Any, Union[int, float]]]:
     visited = {start_node}
     edges = []
     mst = []
+    counter = itertools.count()
 
-    # (weight, u, v)
+    # (weight, counter, u, v)
     for v, weight in graph.get_neighbors(start_node).items():
-        heapq.heappush(edges, (weight, start_node, v))
+        heapq.heappush(edges, (weight, next(counter), start_node, v))
 
     while edges:
-        weight, u, v = heapq.heappop(edges)
+        weight, _, u, v = heapq.heappop(edges)
         if v not in visited:
             visited.add(v)
             mst.append((u, v, weight))
 
             for next_v, next_weight in graph.get_neighbors(v).items():
                 if next_v not in visited:
-                    heapq.heappush(edges, (next_weight, v, next_v))
+                    heapq.heappush(edges, (next_weight, next(counter), v, next_v))
 
     return mst

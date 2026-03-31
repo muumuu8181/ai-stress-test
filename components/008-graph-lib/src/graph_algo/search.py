@@ -87,6 +87,8 @@ def find_connected_components(graph: Graph) -> List[Set[Any]]:
     if graph.directed:
         # Create an undirected version to find weakly connected components
         undirected_graph = Graph(directed=False, weighted=graph.weighted)
+        for v in graph.vertices:
+            undirected_graph.add_vertex(v)
         for u in graph.adj:
             for v, weight in graph.adj[u].items():
                 undirected_graph.add_edge(u, v, weight)

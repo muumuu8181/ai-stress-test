@@ -1,6 +1,6 @@
 import pytest
-from graphlib.graph import DirectedGraph, UndirectedGraph
-from graphlib.shortest_path import dijkstra, bellman_ford
+from graph_algo.graph import DirectedGraph
+from graph_algo.shortest_path import dijkstra, bellman_ford
 
 
 def test_dijkstra():

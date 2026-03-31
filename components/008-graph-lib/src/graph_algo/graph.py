@@ -96,7 +96,7 @@ class Graph:
             - A list of vertices (in order of matrix rows/columns).
             - The adjacency matrix as a list of lists.
         """
-        nodes = sorted(list(self.vertices))
+        nodes = sorted(list(self.vertices), key=lambda x: (str(type(x)), str(x)))
         node_to_idx = {node: i for i, node in enumerate(nodes)}
         size = len(nodes)
 
