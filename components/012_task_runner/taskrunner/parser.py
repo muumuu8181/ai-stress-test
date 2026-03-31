@@ -61,6 +61,9 @@ class Parser:
 
     def _parse_mapping(self, parent_indent: int) -> Dict[str, str]:
         mapping = {}
+        # Peek first indented line to determine section indent
+        section_indent = -1
+
         while self.index < len(self.lines):
             line = self.lines[self.index]
             if not line.strip() or line.strip().startswith("#"):
@@ -68,7 +71,13 @@ class Parser:
                 continue
 
             indent = self._get_indent(line)
-            if indent <= parent_indent and mapping:
+            if indent <= parent_indent:
+                break
+
+            if section_indent == -1:
+                section_indent = indent
+            elif indent != section_indent:
+                # Part of a nested structure or mismatch, handled by callers
                 break
 
             key, value = self._parse_line(line)
@@ -79,6 +88,8 @@ class Parser:
 
     def _parse_tasks(self, parent_indent: int) -> Dict[str, Dict[str, Any]]:
         tasks = {}
+        section_indent = -1
+
         while self.index < len(self.lines):
             line = self.lines[self.index]
             if not line.strip() or line.strip().startswith("#"):
@@ -86,7 +97,12 @@ class Parser:
                 continue
 
             indent = self._get_indent(line)
-            if indent <= parent_indent and tasks:
+            if indent <= parent_indent:
+                break
+
+            if section_indent == -1:
+                section_indent = indent
+            elif indent != section_indent:
                 break
 
             task_name, value = self._parse_line(line)

@@ -15,10 +15,10 @@ class Task:
     def __init__(
         self,
         name: str,
-        dependencies: List[str] = None,
-        commands: List[str] = None,
-        sources: List[str] = None,
-        targets: List[str] = None,
+        dependencies: Any = None,
+        commands: Any = None,
+        sources: Any = None,
+        targets: Any = None,
         variables: Dict[str, str] = None,
     ):
         """
@@ -26,18 +26,25 @@ class Task:
 
         Args:
             name: Name of the task.
-            dependencies: List of task names this task depends on.
-            commands: List of shell commands to execute.
-            sources: List of source files.
-            targets: List of target files.
+            dependencies: List or scalar of task names this task depends on.
+            commands: List or scalar of shell commands to execute.
+            sources: List or scalar of source files.
+            targets: List or scalar of target files.
             variables: Local variables for this task.
         """
         self.name = name
-        self.dependencies = dependencies or []
-        self.commands = commands or []
-        self.sources = sources or []
-        self.targets = targets or []
+        self.dependencies = self._to_list(dependencies)
+        self.commands = self._to_list(commands)
+        self.sources = self._to_list(sources)
+        self.targets = self._to_list(targets)
         self.variables = variables or {}
+
+    def _to_list(self, val: Any) -> List[str]:
+        if val is None:
+            return []
+        if isinstance(val, list):
+            return [str(v) for v in val]
+        return [str(val)]
 
     def expand_variables(self, global_vars: Dict[str, str]) -> None:
         """
@@ -260,12 +267,15 @@ class Runner:
             futures = {}
 
             def submit_task(task_name: str):
+                if self.failed:
+                    return
                 task = task_objs[task_name]
                 future = executor.submit(self._run_task_wrapper, task, total)
                 futures[future] = task_name
 
-            for name in ready_tasks:
-                submit_task(name)
+            with self.lock:
+                for name in ready_tasks:
+                    submit_task(name)
 
             while futures:
                 done, _ = wait(futures.keys(), return_when=FIRST_COMPLETED)
@@ -277,11 +287,11 @@ class Runner:
                         print(f"Task '{task_name}' raised an exception: {e}", file=sys.stderr)
                         success = False
 
-                    if not success:
-                        self.failed = True
+                    with self.lock:
+                        if not success:
+                            self.failed = True
 
-                    if not self.failed:
-                        with self.lock:
+                        if not self.failed:
                             self.completed_tasks.add(task_name)
                             for dependent in dependents[task_name]:
                                 remaining_deps[dependent] -= 1

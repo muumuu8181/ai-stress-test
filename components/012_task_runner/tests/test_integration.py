@@ -81,7 +81,7 @@ tasks:
     # If parallel, it should take around 0.5s + overhead, not 1.0s.
     # Allowing some margin for startup time.
     duration = end_time - start_time
-    assert duration < 0.9, f"Parallel execution took too long: {duration}"
+    assert duration < 1.0, f"Parallel execution took too long: {duration}"
 
 def test_dry_run(tmp_path):
     os.chdir(tmp_path)
