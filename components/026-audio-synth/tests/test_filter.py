@@ -22,3 +22,19 @@ def test_high_pass_filter_basic():
 def test_filters_empty():
     assert low_pass_filter([], 100) == []
     assert high_pass_filter([], 100) == []
+
+
+def test_filters_invalid_params():
+    with pytest.raises(ValueError):
+        low_pass_filter([1.0], 0)
+    with pytest.raises(ValueError):
+        low_pass_filter([1.0], -1)
+    with pytest.raises(ValueError):
+        low_pass_filter([1.0], 100, sample_rate=0)
+
+    with pytest.raises(ValueError):
+        high_pass_filter([1.0], 0)
+    with pytest.raises(ValueError):
+        high_pass_filter([1.0], -1)
+    with pytest.raises(ValueError):
+        high_pass_filter([1.0], 100, sample_rate=0)

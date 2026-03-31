@@ -19,6 +19,11 @@ def low_pass_filter(
     if not buffer:
         return []
 
+    if cutoff_freq <= 0:
+        raise ValueError("cutoff_freq must be greater than zero.")
+    if sample_rate <= 0:
+        raise ValueError("sample_rate must be greater than zero.")
+
     # RC filter time constant
     dt = 1.0 / sample_rate
     rc = 1.0 / (2.0 * math.pi * cutoff_freq)
@@ -49,6 +54,11 @@ def high_pass_filter(
     """
     if not buffer:
         return []
+
+    if cutoff_freq <= 0:
+        raise ValueError("cutoff_freq must be greater than zero.")
+    if sample_rate <= 0:
+        raise ValueError("sample_rate must be greater than zero.")
 
     # RC filter time constant
     dt = 1.0 / sample_rate

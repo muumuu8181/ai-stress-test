@@ -36,6 +36,9 @@ class Sequencer:
         full_buffer = []
 
         for note_name, duration in sequence:
+            if duration < 0:
+                raise ValueError(f"Negative duration {duration} for note {note_name}")
+
             if note_name == "R":
                 # Rest
                 num_samples = int(self.sample_rate * duration)

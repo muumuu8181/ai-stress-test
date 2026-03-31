@@ -27,6 +27,7 @@ def save_wav(filepath: str, buffer: List[float], sample_rate: int = 44100):
             sample = max(-1.0, min(1.0, sample))
             # Scale to 16-bit range
             int_sample = int(sample * 32767)
-            packed_data.append(struct.pack("h", int_sample))
+            # Use little-endian signed short as required by WAV format
+            packed_data.append(struct.pack("<h", int_sample))
 
         wav_file.writeframes(b"".join(packed_data))

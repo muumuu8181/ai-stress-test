@@ -30,3 +30,11 @@ def test_sequencer_with_envelope():
     buffer = seq.render(melody, waveform="sine", envelope=env, amplitude=1.0)
     assert buffer[0] == 0.0
     assert abs(buffer[10]) > 0.0  # Attack phase
+
+
+def test_sequencer_invalid_duration():
+    seq = Sequencer(1000)
+    with pytest.raises(ValueError):
+        seq.render([("A4", -1.0)])
+    with pytest.raises(ValueError):
+        seq.render([("R", -0.5)])
