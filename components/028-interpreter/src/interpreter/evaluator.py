@@ -91,10 +91,11 @@ class Evaluator:
     def evaluate(self, expr: Expr) -> Value:
         """Evaluates an expression and returns a runtime Value."""
         if isinstance(expr, LiteralExpr):
+            # Swap bool/int checks to avoid bool being caught by int (since bool is a subclass of int in Python)
+            if isinstance(expr.value, bool): return BooleanValue(expr.value)
             if isinstance(expr.value, int): return IntegerValue(expr.value)
             if isinstance(expr.value, float): return FloatValue(expr.value)
             if isinstance(expr.value, str): return StringValue(expr.value)
-            if isinstance(expr.value, bool): return BooleanValue(expr.value)
             return Value(expr.value)
         elif isinstance(expr, GroupingExpr):
             return self.evaluate(expr.expression)
@@ -164,12 +165,14 @@ class Evaluator:
         if op_type == TokenType.SLASH:
             if isinstance(left, (IntegerValue, FloatValue)) and isinstance(right, (IntegerValue, FloatValue)):
                 if right.value == 0: raise ZeroDivisionError("Division by zero.")
-                return FloatValue(float(left.value) / float(right.value))
+                res = left.value / right.value
+                return IntegerValue(int(res)) if isinstance(left, IntegerValue) and isinstance(right, IntegerValue) and res == int(res) else FloatValue(float(res))
             raise TypeError("Operands of '/' must be numbers.")
 
         if op_type == TokenType.PERCENT:
             if isinstance(left, (IntegerValue, FloatValue)) and isinstance(right, (IntegerValue, FloatValue)):
-                return IntegerValue(int(left.value % right.value))
+                res = left.value % right.value
+                return IntegerValue(int(res)) if isinstance(left, IntegerValue) and isinstance(right, IntegerValue) else FloatValue(float(res))
             raise TypeError("Operands of '%' must be numbers.")
 
         # Comparison
@@ -182,9 +185,9 @@ class Evaluator:
         if op_type == TokenType.LESS_EQUAL:
             return BooleanValue(left.value <= right.value)
         if op_type == TokenType.BANG_EQUAL:
-            return BooleanValue(left.value != right.value)
+            return BooleanValue(left != right) # Use Value.__eq__ which is now type-aware
         if op_type == TokenType.EQUAL_EQUAL:
-            return BooleanValue(left.value == right.value)
+            return BooleanValue(left == right) # Use Value.__eq__ which is now type-aware
 
         raise TypeError(f"Unknown binary operator: {op_type}")
 
@@ -239,6 +242,7 @@ class Evaluator:
         """Determines if a Value is truthy."""
         if isinstance(val, BooleanValue): return val.value
         if isinstance(val, IntegerValue): return val.value != 0
+        if isinstance(val, FloatValue): return val.value != 0.0
         if isinstance(val, StringValue): return len(val.value) > 0
         if isinstance(val, ArrayValue): return len(val.value) > 0
         return False

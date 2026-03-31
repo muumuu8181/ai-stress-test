@@ -9,9 +9,9 @@ class Value:
         return f"{self.__class__.__name__}({repr(self.value)})"
 
     def __eq__(self, other: Any) -> bool:
-        if isinstance(other, Value):
-            return self.value == other.value
-        return False
+        if not isinstance(other, type(self)):
+            return False
+        return self.value == other.value
 
 class IntegerValue(Value):
     """Integer runtime value."""
