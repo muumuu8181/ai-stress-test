@@ -40,6 +40,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     b64_decode_parser.add_argument(
         "--url-safe", action="store_true", help="Use URL-safe decoding"
     )
+    b64_decode_parser.add_argument(
+        "--text", action="store_true", help="Decode output as UTF-8 text"
+    )
 
     # URL
     url_parser = subparsers.add_parser("url", help="URL commands")
@@ -58,6 +61,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     hex_decode_parser = hex_subparsers.add_parser("decode", help="Hex decode")
     hex_decode_parser.add_argument("data", help="Data to decode")
+    hex_decode_parser.add_argument(
+        "--text", action="store_true", help="Decode output as UTF-8 text"
+    )
 
     # ROT13
     rot13_parser = subparsers.add_parser("rot13", help="ROT13 transformation")
@@ -102,7 +108,14 @@ def main(argv: Optional[List[str]] = None) -> int:
             if args.subcommand == "encode":
                 print(base64_encode(args.data.encode("utf-8"), args.url_safe))
             elif args.subcommand == "decode":
-                print(base64_decode(args.data, args.url_safe).decode("utf-8"))
+                decoded = base64_decode(args.data, args.url_safe)
+                if args.text:
+                    print(decoded.decode("utf-8"))
+                else:
+                    sys.stdout.buffer.write(decoded)
+                    sys.stdout.buffer.flush()
+                    if sys.stdout.isatty():
+                        print()
             else:
                 b64_parser.print_help()
                 return 1
@@ -118,7 +131,14 @@ def main(argv: Optional[List[str]] = None) -> int:
             if args.subcommand == "encode":
                 print(hex_encode(args.data.encode("utf-8")))
             elif args.subcommand == "decode":
-                print(hex_decode(args.data).decode("utf-8"))
+                decoded = hex_decode(args.data)
+                if args.text:
+                    print(decoded.decode("utf-8"))
+                else:
+                    sys.stdout.buffer.write(decoded)
+                    sys.stdout.buffer.flush()
+                    if sys.stdout.isatty():
+                        print()
             else:
                 hex_parser.print_help()
                 return 1

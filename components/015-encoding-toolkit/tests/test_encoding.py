@@ -31,4 +31,4 @@ def test_detect_encoding_bom():
 def test_detect_encoding_unknown():
     # Random bytes that might not be valid in any of the tested encodings
     data = b"\xff\xff\xff\xff"
-    assert detect_encoding(data) in ["latin-1", None]
+    assert detect_encoding(data) is None

@@ -40,7 +40,7 @@ def detect_encoding(data: bytes) -> Optional[str]:
             return encoding
 
     # Try common encodings in order
-    encodings = ["utf-8", "shift-jis", "euc-jp", "latin-1"]
+    encodings = ["utf-8", "shift-jis", "euc-jp"]
     for enc in encodings:
         try:
             data.decode(enc)

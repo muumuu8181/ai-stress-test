@@ -29,3 +29,13 @@ def test_base64_empty():
 def test_base64_invalid():
     with pytest.raises(ValueError, match="Invalid Base64 input"):
         base64_decode("invalid-base64!")
+
+
+def test_base64_strict_validation():
+    # "YWJj$" contains illegal character '$'
+    with pytest.raises(ValueError, match="Invalid Base64 input"):
+        base64_decode("YWJj$", url_safe=False)
+
+    # URL-safe also should be strict
+    with pytest.raises(ValueError, match="Invalid Base64 input"):
+        base64_decode("YWJj$", url_safe=True)
