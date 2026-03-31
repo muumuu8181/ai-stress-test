@@ -6,9 +6,10 @@ ERROR_VALUE = "#VALUE!"
 ERROR_DIV0 = "#DIV/0!"
 ERROR_NAME = "#NAME?"
 ERROR_CIRC = "#CIRC!"
+ERROR_NA = "#N/A"
 
 # List of all spreadsheet error constants
-ALL_ERRORS = {ERROR_REF, ERROR_VALUE, ERROR_DIV0, ERROR_NAME, ERROR_CIRC}
+ALL_ERRORS = {ERROR_REF, ERROR_VALUE, ERROR_DIV0, ERROR_NAME, ERROR_CIRC, ERROR_NA}
 
 def is_error(value: Any) -> bool:
     """
@@ -81,6 +82,9 @@ class Cell:
         if self.value is None:
             return ""
 
+        if is_error(self.value):
+            return str(self.value)
+
         if isinstance(self.value, (int, float)):
             if self.format_str:
                 try:
@@ -91,7 +95,11 @@ class Cell:
             if isinstance(self.value, float):
                 if self.value.is_integer():
                     return str(int(self.value))
-                return f"{self.value:.2f}"
+                # For non-integers, show at least 2 decimal places if they exist, but don't hardcode .2f
+                # Actually, standard spreadsheets often show as is or with some limit.
+                # Let's use a simpler format for default.
+                res = f"{self.value:g}"
+                return res
             return str(self.value)
 
         return str(self.value)

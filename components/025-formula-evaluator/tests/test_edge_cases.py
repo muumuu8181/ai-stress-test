@@ -26,7 +26,8 @@ def test_formatting():
 
     cell = sheet.get_cell("A1")
     cell.set_value("10.5")
-    assert cell.get_display_value() == "10.50"
+    # New default formatting uses :g which doesn't force .50
+    assert cell.get_display_value() == "10.5"
 
     cell.set_value("10")
     assert cell.get_display_value() == "10"

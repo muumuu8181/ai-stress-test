@@ -46,48 +46,8 @@ class Evaluator:
             return cell.value
 
         if isinstance(node, RangeNode):
-            # Range evaluation returns 2D list for all range types
-            sheet, rest = self.manager.resolve_reference(self.current_sheet_name, node.range_ref)
-            if not sheet or ':' not in rest:
-                return ERROR_REF
-
-            start_ref, end_ref = rest.split(':')
-            try:
-                s_row, s_col = sheet.parse_address(start_ref)
-                e_row, e_col = sheet.parse_address(end_ref)
-
-                # Handling of column-wide ranges
-                if s_row is None and e_row is None:
-                    # e.g. A:B. We need to collect all rows for these columns.
-                    # As a spreadsheet, we'll collect up to the last non-empty row.
-                    max_row = 0
-                    for cell_addr in sheet.cells:
-                        r, c = sheet.parse_address(cell_addr)
-                        if r is not None:
-                            max_row = max(max_row, r)
-
-                    rows = []
-                    for r in range(max_row + 1):
-                        row = []
-                        for c in range(min(s_col, e_col), max(s_col, e_col) + 1):
-                            addr = sheet.to_address(r, c)
-                            row.append(sheet.get_cell(addr).value)
-                        rows.append(row)
-                    return rows
-
-                if s_row is not None and e_row is not None:
-                    rows = []
-                    for r in range(min(s_row, e_row), max(s_row, e_row) + 1):
-                        row = []
-                        for c in range(min(s_col, e_col), max(s_col, e_col) + 1):
-                            addr = sheet.to_address(r, c)
-                            row.append(sheet.get_cell(addr).value)
-                        rows.append(row)
-                    return rows
-
-                return ERROR_REF
-            except ValueError:
-                return ERROR_REF
+            # Returns a 2D list of values
+            return self.manager.get_range(self.current_sheet_name, node.range_ref)
 
         if isinstance(node, BinaryOpNode):
             left = self.evaluate(node.left)

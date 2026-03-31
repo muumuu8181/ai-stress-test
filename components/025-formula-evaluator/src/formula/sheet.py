@@ -1,5 +1,5 @@
 import re
-from typing import Dict, List, Optional, Tuple, Set, Union
+from typing import Dict, List, Optional, Tuple, Set, Union, Any
 from .cell import Cell, ERROR_CIRC, ERROR_REF, is_error
 from .lexer import Lexer
 from .parser import Parser, CellNode, RangeNode, BinaryOpNode, FunctionCallNode
@@ -23,6 +23,8 @@ class Sheet:
         self.cells: Dict[str, Cell] = {}
         # dependents[cell_addr] = set of cells (as 'Sheet!A1') that depend on cell_addr
         self.dependents: Dict[str, Set[str]] = {}
+        # range_dependents[range_ref] = set of cells that depend on that range
+        self.range_dependents: Dict[str, Set[str]] = {}
 
     def get_cell(self, address: str) -> Cell:
         """
@@ -52,16 +54,19 @@ class Sheet:
 
         # Clear old dependencies
         for dep in list(cell.dependencies):
-            sheet, addr = self.manager._resolve_full_reference(self.name, dep)
-            if sheet and addr in sheet.dependents:
-                sheet.dependents[addr].discard(f"{self.name}!{address}")
+            sheet_name, rest = self.manager._split_ref(dep)
+            target_sheet = self.manager.get_sheet(sheet_name or self.name)
+            if target_sheet:
+                if ':' in rest:
+                    target_sheet.range_dependents[rest].discard(f"{self.name}!{address}")
+                else:
+                    target_sheet.dependents[rest].discard(f"{self.name}!{address}")
 
         cell.set_value(value)
 
         # Parse formula to find new dependencies
         if cell.formula:
             try:
-                # If formula is just empty or whitespace, it's invalid
                 if not cell.formula.strip():
                     raise ValueError("Empty formula")
 
@@ -71,30 +76,21 @@ class Sheet:
                 ast = parser.parse()
 
                 new_deps = self._find_dependencies(ast)
-                expanded_deps = set()
+                cell.dependencies = new_deps
+
                 for dep in new_deps:
                     sheet_name, rest = self.manager._split_ref(dep)
                     target_sheet = self.manager.get_sheet(sheet_name or self.name)
                     if target_sheet:
                         if ':' in rest:
-                            # Expand range to individual cells
-                            cells = self.manager.get_range(sheet_name or self.name, rest)
-                            for c in cells:
-                                expanded_deps.add(f"{target_sheet.name}!{c.address}")
+                            if rest not in target_sheet.range_dependents:
+                                target_sheet.range_dependents[rest] = set()
+                            target_sheet.range_dependents[rest].add(f"{self.name}!{address}")
                         else:
-                            expanded_deps.add(f"{target_sheet.name}!{rest}")
-
-                cell.dependencies = expanded_deps
-
-                for dep in expanded_deps:
-                    s_name, s_addr = self.manager._split_ref(dep)
-                    sheet = self.manager.get_sheet(s_name)
-                    if sheet:
-                        if s_addr not in sheet.dependents:
-                            sheet.dependents[s_addr] = set()
-                        sheet.dependents[s_addr].add(f"{self.name}!{address}")
+                            if rest not in target_sheet.dependents:
+                                target_sheet.dependents[rest] = set()
+                            target_sheet.dependents[rest].add(f"{self.name}!{address}")
             except Exception:
-                # We will set the cell value to #ERROR! in recalculate
                 pass
 
         self.manager.recalculate(f"{self.name}!{address}")
@@ -193,13 +189,14 @@ class SpreadsheetManager:
         target_sheet_name = sheet_name if sheet_name else current_sheet_name
         return self.get_sheet(target_sheet_name), address
 
-    def get_range(self, current_sheet_name: str, range_ref: str) -> List[Cell]:
+    def get_range(self, current_sheet_name: str, range_ref: str) -> List[List[Any]]:
+        """Get all cells in a range. Always returns a 2D list of values for evaluation."""
         sheet, rest = self.resolve_reference(current_sheet_name, range_ref)
         if not sheet: return []
 
         if ':' not in rest:
             try:
-                return [sheet.get_cell(rest)]
+                return [[sheet.get_cell(rest).value]]
             except ValueError:
                 return []
 
@@ -209,26 +206,31 @@ class SpreadsheetManager:
             e_row, e_col = sheet.parse_address(end_ref)
 
             if s_row is None and e_row is None:
+                # e.g. A:B.
                 max_row = 0
                 for cell_addr in sheet.cells:
                     r, c = sheet.parse_address(cell_addr)
                     if r is not None:
                         max_row = max(max_row, r)
 
-                cells = []
-                for c in range(min(s_col, e_col), max(s_col, e_col) + 1):
-                    for r in range(max_row + 1):
-                        addr = sheet.to_address(r, c)
-                        cells.append(sheet.get_cell(addr))
-                return cells
-
-            if s_row is not None and e_row is not None:
-                cells = []
-                for r in range(min(s_row, e_row), max(s_row, e_row) + 1):
+                rows = []
+                for r in range(max_row + 1):
+                    row = []
                     for c in range(min(s_col, e_col), max(s_col, e_col) + 1):
                         addr = sheet.to_address(r, c)
-                        cells.append(sheet.get_cell(addr))
-                return cells
+                        row.append(sheet.get_cell(addr).value)
+                    rows.append(row)
+                return rows
+
+            if s_row is not None and e_row is not None:
+                rows = []
+                for r in range(min(s_row, e_row), max(s_row, e_row) + 1):
+                    row = []
+                    for c in range(min(s_col, e_col), max(s_col, e_col) + 1):
+                        addr = sheet.to_address(r, c)
+                        row.append(sheet.get_cell(addr).value)
+                    rows.append(row)
+                return rows
         except ValueError:
             return []
         return []
@@ -264,12 +266,10 @@ class SpreadsheetManager:
             if cell.formula:
                 evaluator = Evaluator(self, sheet_name)
                 try:
-                    # If formula is only "=" or has no tokens
                     if not cell.formula.strip():
-                         raise ValueError("Empty formula")
+                        raise ValueError("Empty formula")
                     lexer = Lexer(cell.formula)
-                    tokens = lexer.tokenize()
-                    parser = Parser(tokens)
+                    parser = Parser(lexer.tokenize())
                     cell.value = evaluator.evaluate(parser.parse())
                 except Exception:
                     cell.value = "#ERROR!"
@@ -280,13 +280,45 @@ class SpreadsheetManager:
 
         sheet_name, addr = self._split_ref(node)
         sheet = self.get_sheet(sheet_name)
-        if sheet and addr in sheet.dependents:
-            for dep in sheet.dependents[addr]:
-                if dep in stack:
-                    raise ValueError("Circular reference")
-                if dep not in visited:
-                    self._check_cycles(dep, visited, stack)
+        if sheet:
+            # Check cell dependents
+            if addr in sheet.dependents:
+                for dep in sheet.dependents[addr]:
+                    if dep in stack:
+                        raise ValueError("Circular reference")
+                    if dep not in visited:
+                        self._check_cycles(dep, visited, stack)
+
+            # Check if this cell is part of any range dependencies
+            for range_ref, dependents in sheet.range_dependents.items():
+                if self._cell_in_range(addr, range_ref, sheet):
+                    for dep in dependents:
+                        if dep in stack:
+                            raise ValueError("Circular reference")
+                        if dep not in visited:
+                            self._check_cycles(dep, visited, stack)
+
         stack.remove(node)
+
+    def _cell_in_range(self, cell_addr: str, range_ref: str, sheet: Sheet) -> bool:
+        """Helper to check if a cell address is within a range reference."""
+        try:
+            r, c = sheet.parse_address(cell_addr)
+            start_ref, end_ref = range_ref.split(':')
+            s_row, s_col = sheet.parse_address(start_ref)
+            e_row, e_col = sheet.parse_address(end_ref)
+
+            if s_row is None and e_row is None:
+                # Column range
+                return min(s_col, e_col) <= c <= max(s_col, e_col)
+
+            if s_row is not None and e_row is not None:
+                # Normal range
+                return (min(s_row, e_row) <= r <= max(s_row, e_row) and
+                        min(s_col, e_col) <= c <= max(s_col, e_col))
+        except (ValueError, TypeError):
+            pass
+        return False
 
     def _get_all_reachable(self, start_node: str) -> Set[str]:
         visited = set()
@@ -297,9 +329,17 @@ class SpreadsheetManager:
                 visited.add(curr)
                 sheet_name, addr = self._split_ref(curr)
                 sheet = self.get_sheet(sheet_name)
-                if sheet and addr in sheet.dependents:
-                    for dep in sheet.dependents[addr]:
-                        to_visit.append(dep)
+                if sheet:
+                    # Check cell dependents
+                    if addr in sheet.dependents:
+                        for dep in sheet.dependents[addr]:
+                            to_visit.append(dep)
+
+                    # Check range dependents
+                    for range_ref, dependents in sheet.range_dependents.items():
+                        if self._cell_in_range(addr, range_ref, sheet):
+                            for dep in dependents:
+                                to_visit.append(dep)
         return visited
 
     def _topological_sort(self, nodes: Set[str]) -> List[str]:
@@ -311,10 +351,19 @@ class SpreadsheetManager:
                 visited.add(node)
                 sheet_name, addr = self._split_ref(node)
                 sheet = self.get_sheet(sheet_name)
-                if sheet and addr in sheet.dependents:
-                    for dep in sheet.dependents[addr]:
-                        if dep in nodes:
-                            visit(dep)
+                if sheet:
+                    # Check cell dependents
+                    if addr in sheet.dependents:
+                        for dep in sheet.dependents[addr]:
+                            if dep in nodes:
+                                visit(dep)
+
+                    # Check range dependents
+                    for range_ref, dependents in sheet.range_dependents.items():
+                        if self._cell_in_range(addr, range_ref, sheet):
+                            for dep in dependents:
+                                if dep in nodes:
+                                    visit(dep)
                 result.append(node)
 
         for node in nodes:

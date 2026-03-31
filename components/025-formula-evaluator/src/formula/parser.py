@@ -78,7 +78,10 @@ class Parser:
         """
         if not self.tokens:
             raise ValueError("Empty formula")
-        return self.parse_expression()
+        res = self.parse_expression()
+        if self.pos < len(self.tokens):
+            raise ValueError(f"Unexpected token at position {self.pos}: {self.peek()}")
+        return res
 
     def parse_expression(self) -> ASTNode:
         """Parse additive expression (+, -)"""
