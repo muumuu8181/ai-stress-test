@@ -72,14 +72,11 @@ class BTree:
         Args:
             key (Any): The key to insert.
         """
-        root = self.root
-        # Check if the key already exists (optional, based on requirement "Duplicate key handling")
-        # For B-Trees, we usually allow duplicates or just skip them.
-        # The requirement says "Duplicate key handling", I'll allow them for now
-        # or handle them by just inserting. Actually, standard B-Trees often don't have duplicates.
-        # If we want to support them, we need to decide where they go.
-        # Let's assume we allow them and they go to the right.
+        # Ensure key is comparable to avoid state corruption
+        if self.root.keys:
+            _ = key < self.root.keys[0] or key > self.root.keys[0]
 
+        root = self.root
         if len(root.keys) == (2 * self.t) - 1:
             new_root = BTreeNode(False)
             self.root = new_root
@@ -124,12 +121,10 @@ class BTree:
         """
         i = len(x.keys) - 1
         if x.leaf:
-            # Insert into leaf
-            x.keys.append(None)
+            # Find insertion point before mutating
             while i >= 0 and k < x.keys[i]:
-                x.keys[i + 1] = x.keys[i]
                 i -= 1
-            x.keys[i + 1] = k
+            x.keys.insert(i + 1, k)
         else:
             # Find child to descend
             while i >= 0 and k < x.keys[i]:

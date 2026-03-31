@@ -172,5 +172,16 @@ def test_btree_edge_cases():
 def test_btree_non_comparable_keys():
     bt = BTree(t=2)
     bt.insert(10)
+    bt.insert(20)
+
+    initial_state = list(bt)
+    initial_dump = bt.dump()
+
     with pytest.raises(TypeError):
         bt.insert("string")
+
+    # Verify state is unchanged
+    assert list(bt) == initial_state
+    assert bt.dump() == initial_dump
+    # Verify no None keys were left (corruption check)
+    assert None not in bt.root.keys
