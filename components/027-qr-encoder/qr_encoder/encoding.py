@@ -6,7 +6,8 @@ def get_best_mode(data: str) -> Mode:
     """
     Selects the most efficient encoding mode for the given data.
     """
-    if data.isdigit():
+    # Strict ASCII digit check to avoid matching non-ASCII Unicode digits
+    if all('0' <= c <= '9' for c in data):
         return Mode.NUMERIC
     if all(c in ALPHANUMERIC_CHARS for c in data):
         return Mode.ALPHANUMERIC
@@ -52,6 +53,14 @@ def get_version_and_data_bits(data: str, ec_level: ErrorCorrectionLevel) -> Tupl
     """
     mode = get_best_mode(data)
 
+    # Check if non-ASCII to determine if ECI is needed for Byte mode
+    use_eci = False
+    if mode == Mode.BYTE:
+        try:
+            data.encode("ascii")
+        except UnicodeEncodeError:
+            use_eci = True
+
     for version in range(1, 11):
         mode_bits = f"{mode.value:04b}"
         char_count_bits = get_char_count_indicator_bits(version, mode)
@@ -59,16 +68,20 @@ def get_version_and_data_bits(data: str, ec_level: ErrorCorrectionLevel) -> Tupl
         if mode == Mode.NUMERIC:
             encoded_data = encode_numeric(data)
             char_count = len(data)
+            prefix = ""
         elif mode == Mode.ALPHANUMERIC:
             encoded_data = encode_alphanumeric(data)
             char_count = len(data)
+            prefix = ""
         else:
             encoded_data = encode_byte(data)
             # In Byte mode, character count indicator is the number of bytes
             char_count = len(data.encode("utf-8"))
+            # ECI mode indicator 0111, Assignment 26 (UTF-8) as 8 bits
+            prefix = f"{Mode.ECI.value:04b}{26:08b}" if use_eci else ""
 
         char_count_val = f"{char_count:0{char_count_bits}b}"
-        total_bits = len(mode_bits) + len(char_count_val) + len(encoded_data)
+        total_bits = len(prefix) + len(mode_bits) + len(char_count_val) + len(encoded_data)
 
         # Calculate total data capacity for this version/EC level
         ec_info = EC_CONFIG[version][ec_level]
@@ -77,7 +90,7 @@ def get_version_and_data_bits(data: str, ec_level: ErrorCorrectionLevel) -> Tupl
 
         if total_bits <= total_data_bits:
             # Found suitable version. Complete bitstream with terminator and padding.
-            bitstream = mode_bits + char_count_val + encoded_data
+            bitstream = prefix + mode_bits + char_count_val + encoded_data
 
             # Terminator
             terminator_len = min(4, total_data_bits - len(bitstream))

@@ -58,6 +58,34 @@ class QRMatrix:
         # Dark module is at (4*version + 9, 8)
         self.set_module(4 * self.version + 9, 8, True, True)
 
+    def place_version_info(self) -> None:
+        if self.version < 7:
+            return
+
+        # Version info is 18 bits
+        # bits 0-5: version number, bits 6-17: error correction (BCH)
+        rem = self.version << 12
+        gen = 0x1F25 # x^12 + x^10 + x^9 + x^8 + x^5 + x^2 + 1
+        for i in range(5, -1, -1):
+            if rem & (1 << (i + 12)):
+                rem ^= gen << i
+        version_info = (self.version << 12) | rem
+
+        # Place version info
+        bits = [bool((version_info >> i) & 1) for i in range(18)]
+
+        # Placement 1: Above bottom-left finder
+        for i in range(18):
+            r = self.size - 11 + (i % 3)
+            c = i // 3
+            self.set_module(r, c, bits[i], True)
+
+        # Placement 2: Left of top-right finder
+        for i in range(18):
+            r = i // 3
+            c = self.size - 11 + (i % 3)
+            self.set_module(r, c, bits[i], True)
+
     def place_format_info(self, ec_level: ErrorCorrectionLevel, mask_pattern: int) -> None:
         # Format info is 15 bits
         # bits 0-1: EC level, bits 2-4: mask pattern, bits 5-14: error correction
@@ -201,6 +229,7 @@ def generate_optimal_matrix(version: int, ec_level: ErrorCorrectionLevel, codewo
         m.place_alignment_patterns()
         m.place_timing_patterns()
         m.place_dark_module()
+        m.place_version_info()
         m.place_format_info(ec_level, p)
 
         m.place_data(codewords, p)
