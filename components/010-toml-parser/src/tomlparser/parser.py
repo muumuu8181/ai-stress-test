@@ -85,6 +85,9 @@ class Parser:
         for i, key in enumerate(keys[:-1]):
             if key not in curr:
                 curr[key] = {}
+                # If we are in the main result dict, track these implicit tables
+                if target is self.result:
+                    self.defined_tables.add(tuple(keys[:i+1]))
             elif not isinstance(curr[key], dict):
                 raise ValueError(f"Key {key} already exists and is not a table")
             curr = curr[key]
@@ -195,10 +198,8 @@ class Parser:
                 if key not in curr:
                     curr[key] = {}
                 elif not isinstance(curr[key], dict):
-                    # Special case: it might be an array of tables
-                    if isinstance(curr[key], list) and len(curr[key]) > 0:
-                        curr = curr[key][-1]
-                        continue
-                    raise ValueError(f"Key {key} already exists and is not a table")
+                    # In TOML v1.0, you can't redefine a table that is already an array of tables.
+                    # The previous logic was too lenient and allowed "merging" into the last element.
+                    raise ValueError(f"Key {key} already exists and is not a standard table (might be an array of tables)")
                 curr = curr[key]
             self.current_table = curr

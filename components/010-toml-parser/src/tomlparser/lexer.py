@@ -262,26 +262,31 @@ class Lexer:
         line, column = self.line, self.column
         value = ""
 
-        # Check if it's potentially a datetime or number
-        # Let's peek more carefully or just consume and try to parse.
-        # But bare keys are simpler: [A-Za-z0-9_-]+
-
         while self.pos < len(self.content):
             char = self.content[self.pos]
-            if char.isalnum() or char in '-_:.+TZ tz' or (not value and char in '+-'):
-                if char == '.':
-                    # Only treat '.' as part of the value if the value is purely numeric so far.
-                    # This allows distinguishing between floats (3.14) and dotted keys (a1.b).
-                    # Bare keys cannot start with a digit in TOML but can contain them.
-                    # Actually TOML bare keys are [A-Za-z0-9_-]+.
-                    # If it starts with a digit, it might be a number.
-                    if value and not all(c.isdigit() or c in '+-' for c in value):
-                        break
-                # Peek for next char if it's space, check if it's part of datetime
-                if char == ' ':
-                    # Only allow space if it's like "1979-05-27 07:32:00"
-                    if not (len(value) >= 10 and value[4] == '-' and value[7] == '-'):
-                        break
+
+            # Check for breaking on dot/colon if it's NOT part of a number/datetime
+            if char == '.' and value:
+                # Is it a float? 1.2, 1_2.3
+                if all(c.isdigit() or c in '+-_' for c in value):
+                    pass
+                # Is it a datetime? 1979-05-27T... or 12:34:56.123
+                elif any(c == '-' for c in value) or any(c == ':' for c in value):
+                    pass
+                else:
+                    break
+            elif char == ':' and value:
+                # Is it a time/datetime? 12:34, 1979-05-27T...
+                if any(c.isdigit() for c in value):
+                     pass
+                else:
+                     break
+            elif char == ' ' and value:
+                # Only allow space if it's like "1979-05-27 07:32:00"
+                if not (len(value) >= 10 and value[4] == '-' and value[7] == '-'):
+                    break
+
+            if char.isalnum() or char in '-_:.+TZtz ':
                 value += char
                 self._advance()
             else:
@@ -317,71 +322,76 @@ class Lexer:
 
         # Try number
         try:
-            # TOML numbers can have underscores
+            # Validate underscore placement
+            if '_' in value:
+                if value.startswith('_') or value.endswith('_'):
+                    raise ValueError("Underscore cannot be at the start or end of a number")
+                if '__' in value:
+                    raise ValueError("Consecutive underscores are not allowed")
+                for i in range(len(value)):
+                    if value[i] == '_':
+                        if i == 0 or i == len(value) - 1:
+                             raise ValueError("Underscore cannot be at the start or end of a number")
+                        if not (value[i-1].isdigit() and value[i+1].isdigit()):
+                            raise ValueError("Underscore must be between digits")
+
             clean_value = value.replace('_', '')
-            if '.' in clean_value or 'e' in clean_value.lower():
+
+            # Float branch
+            if ('.' in clean_value or ('e' in clean_value.lower() and not clean_value.lower().startswith('0x'))) and \
+               (clean_value[0].isdigit() or clean_value[0] in '+-'):
+                if clean_value.startswith('.') or clean_value.endswith('.'):
+                    raise ValueError("Float cannot start or end with a dot")
+                if 'e' in clean_value.lower():
+                    parts = clean_value.lower().split('e')
+                    if len(parts) != 2 or not parts[0] or not parts[1]:
+                        raise ValueError("Invalid exponent format")
+
+                int_part = clean_value.split('.')[0].split('e')[0]
+                if (len(int_part) > 1 and int_part.startswith('0')) or \
+                   ((int_part.startswith('+') or int_part.startswith('-')) and len(int_part) > 2 and int_part[1] == '0'):
+                    raise ValueError("Leading zeros are not allowed in the integer part of a float")
+
                 num = float(clean_value)
                 self.tokens.append(Token(TokenType.FLOAT, num, line, column))
                 return
-            else:
-                # Support hex, oct, bin
-                if clean_value.startswith('0x'):
-                    num = int(clean_value, 16)
-                elif clean_value.startswith('0o'):
-                    num = int(clean_value, 8)
-                elif clean_value.startswith('0b'):
-                    num = int(clean_value, 2)
-                else:
-                    # Check for prohibited leading zeros in integers
-                    if len(clean_value) > 1 and clean_value.startswith('0'):
-                        # This will fail the float/int parse later, but better to be explicit
-                        pass
-                    elif (clean_value.startswith('+') or clean_value.startswith('-')) and len(clean_value) > 2 and clean_value[1] == '0':
-                        pass
-                    else:
-                        num = int(clean_value)
-                        self.tokens.append(Token(TokenType.INTEGER, num, line, column))
-                        return
 
-                # If we reach here, either it's not an int or it has invalid leading zeros
-                # If it had leading zeros, int() would still parse it, so we must raise.
-                if (clean_value.startswith('0') and len(clean_value) > 1) or \
-                   ((clean_value.startswith('+') or clean_value.startswith('-')) and len(clean_value) > 2 and clean_value[1] == '0'):
-                    raise ValueError(f"Invalid leading zero in integer: {value} at {line}:{column}")
+            # Integer branch
+            elif clean_value.startswith('0x'):
+                num = int(clean_value, 16)
+                self.tokens.append(Token(TokenType.INTEGER, num, line, column))
                 return
-        except ValueError:
-            pass
+            elif clean_value.startswith('0o'):
+                num = int(clean_value, 8)
+                self.tokens.append(Token(TokenType.INTEGER, num, line, column))
+                return
+            elif clean_value.startswith('0b'):
+                num = int(clean_value, 2)
+                self.tokens.append(Token(TokenType.INTEGER, num, line, column))
+                return
+            elif clean_value.isdigit() or (clean_value.startswith(('+', '-')) and clean_value[1:].isdigit()):
+                if (clean_value.startswith('0') and len(clean_value) > 1) or \
+                   (clean_value.startswith(('+', '-')) and len(clean_value) > 2 and clean_value[1] == '0'):
+                    raise ValueError("Invalid leading zero in integer")
+                num = int(clean_value)
+                self.tokens.append(Token(TokenType.INTEGER, num, line, column))
+                return
+        except ValueError as e:
+            # If it looks like it was intended to be a number, re-raise the error
+            if any(c.isdigit() for c in value) and ('.' in value or 'e' in value.lower() or value.startswith(('0x', '0o', '0b', '+', '-', '0'))):
+                raise e
+            if '_' in value:
+                # Underscore only allowed in numbers
+                raise e
 
-        # If none of the above, it's a bare key
-        # Bare keys only allow [A-Za-z0-9_-]
-        # BUT: In TOML, bare keys cannot start with a digit unless they are quoted.
-        # Actually, TOML spec says: "Bare keys may only contain ASCII alphanumerics, underscores, and dashes (A-Z, a-z, 0-9, _, -)."
-        # It doesn't explicitly forbid starting with a digit, BUT if it starts with a digit, it might be parsed as a number.
+        # Bare key fallback
         if all(c.isalnum() or c in '-_' for c in value):
-             # Additional check: if it looks like it WAS intended to be a number but failed (like leading zeros),
-             # we should have already raised or it shouldn't be a bare key if it starts with digit?
-             # Actually, if it starts with a digit, it should NOT be a bare key if we want to follow TOML strictly?
-             # "Bare keys may only contain... (0-9)" -> it CAN contain digits.
-             # If it starts with a digit AND it's not a valid number, is it a bare key?
-             # TOML says: "Bare keys ... A-Z, a-z, 0-9, _, -". Yes, they can start with digits.
-             # HOWEVER, if it starts with '0' followed by digits, it's NOT a bare key if it was intended as a number.
-             # Let's re-read: "Bare keys ... must be non-empty."
-
-             # The issue is '01' was intended as a number in the test, but lexer fell through to BARE_KEY.
-             # If it starts with a digit, we should probably be more careful.
-             if (value[0].isdigit() or value[0] in '+-') and not all(c.isdigit() or c in '+-' for c in value):
-                 # It's a bare key starting with digit or sign, e.g., 1abc. This is allowed in TOML.
-                 pass
-             elif value[0].isdigit() or value[0] in '+-':
-                 # It's all digits (and optional sign) but didn't parse as INTEGER (likely due to leading zeros).
-                 clean_v = value.replace('_', '')
-                 if clean_v.startswith('0') and len(clean_v) > 1:
-                     raise ValueError(f"Invalid leading zero in integer: {value} at {line}:{column}")
-                 if (clean_v.startswith('+') or clean_v.startswith('-')) and len(clean_v) > 2 and clean_v[1] == '0':
-                     raise ValueError(f"Invalid leading zero in integer: {value} at {line}:{column}")
+             if value and (value[0].isdigit() or value[0] in '+-'):
+                 # It might still be a bare key if it contains letters, e.g., 1abc
+                 if all(c.isdigit() or c in '+-_' for c in value):
+                     # All digits/signs but failed number parse -> it's a malformed number
+                     raise ValueError(f"Malformed number: {value} at {line}:{column}")
 
              self.tokens.append(Token(TokenType.BARE_KEY, value, line, column))
         else:
-            # If it's not a valid bare key, maybe it was a malformed something else.
-            # Since we are in _tokenize_key_or_value, if it's not a number/bool/datetime, it MUST be a bare key if we are to proceed.
              raise ValueError(f"Invalid bare key or malformed value: {value} at {line}:{column}")

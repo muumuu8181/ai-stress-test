@@ -29,6 +29,12 @@ def parse_toml_datetime(s: str) -> Union[datetime.datetime, datetime.date, datet
         if offset_part.upper() == 'Z':
             offset_part = '+00:00'
 
+        # TOML permits higher precision fractional seconds (with truncation to microseconds)
+        if '.' in time_part:
+            base_time, frac = time_part.split('.')
+            if len(frac) > 6:
+                time_part = f"{base_time}.{frac[:6]}"
+
         # Python's fromisoformat handles microseconds and offsets
         try:
             return datetime.datetime.fromisoformat(f"{date_part}T{time_part}{offset_part}")
@@ -38,8 +44,13 @@ def parse_toml_datetime(s: str) -> Union[datetime.datetime, datetime.date, datet
     # Local Date-Time
     match = LOCAL_DATETIME_RE.match(s)
     if match:
+        dt_str = s.replace(' ', 'T')
+        if '.' in dt_str:
+            base_dt, frac = dt_str.split('.')
+            if len(frac) > 6:
+                dt_str = f"{base_dt}.{frac[:6]}"
         try:
-            return datetime.datetime.fromisoformat(s.replace(' ', 'T'))
+            return datetime.datetime.fromisoformat(dt_str)
         except ValueError:
             return None
 
@@ -54,8 +65,13 @@ def parse_toml_datetime(s: str) -> Union[datetime.datetime, datetime.date, datet
     # Local Time
     match = LOCAL_TIME_RE.match(s)
     if match:
+        t_str = s
+        if '.' in t_str:
+            base_t, frac = t_str.split('.')
+            if len(frac) > 6:
+                t_str = f"{base_t}.{frac[:6]}"
         try:
-            return datetime.time.fromisoformat(s)
+            return datetime.time.fromisoformat(t_str)
         except ValueError:
             return None
 
