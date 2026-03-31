@@ -41,6 +41,11 @@ def test_string_format_date():
         validate("31-12-2023", schema)
     with pytest.raises(ValidationError):
         validate("2023-13-01", schema)
+    with pytest.raises(ValidationError):
+        validate("2023-02-31", schema)
+    with pytest.raises(ValidationError):
+        validate("2023-02-29", schema)
+    validate("2024-02-29", schema) # Leap year
 
 def test_string_keywords_non_string():
     # Keywords should be ignored if the type is not a string

@@ -15,10 +15,9 @@ def get_type(instance: Any) -> JsonType:
         return "boolean"
     if isinstance(instance, str):
         return "string"
-    if isinstance(instance, int):
-        return "integer"
-    if isinstance(instance, float):
-        # Even if it's 1.0, it's considered 'number' in JSON Schema
+    if isinstance(instance, (int, float)):
+        if isinstance(instance, int) or instance.is_integer():
+            return "integer"
         return "number"
     if isinstance(instance, list):
         return "array"

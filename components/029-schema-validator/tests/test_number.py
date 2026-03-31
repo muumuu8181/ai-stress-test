@@ -34,6 +34,10 @@ def test_number_multipleOf():
     with pytest.raises(ValidationError):
         validate(4, schema)
 
+    # Float precision test
+    schema2 = {"type": "number", "multipleOf": 0.1}
+    validate(0.3, schema2)
+
 def test_integer_multipleOf():
     schema = {"type": "integer", "multipleOf": 3}
     validate(0, schema)

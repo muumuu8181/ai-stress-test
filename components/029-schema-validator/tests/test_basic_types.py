@@ -14,6 +14,7 @@ def test_number_type():
 
 def test_integer_type():
     validate(123, {"type": "integer"})
+    validate(1.0, {"type": "integer"})
     with pytest.raises(ValidationError):
         validate(123.45, {"type": "integer"})
 

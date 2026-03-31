@@ -21,7 +21,7 @@ class Validator:
 
         Raises ValidationError if validation fails.
         """
-        self._validate(instance, self.root_schema, [])
+        self._validate(instance, self.root_schema, [], set())
 
     def _resolve_ref(self, ref: str) -> Any:
         """Resolves internal JSON pointers (e.g., #/definitions/address)."""
@@ -48,7 +48,13 @@ class Validator:
         self._ref_cache[ref] = current
         return current
 
-    def _validate(self, instance: Any, schema: Union[Dict[str, Any], bool], path: List[Any]) -> None:
+    def _validate(
+        self,
+        instance: Any,
+        schema: Union[Dict[str, Any], bool],
+        path: List[Any],
+        seen: set
+    ) -> None:
         """Internal recursive validation function."""
         # Boolean schema support
         if isinstance(schema, bool):
@@ -63,10 +69,19 @@ class Validator:
         # Handle $ref
         if "$ref" in schema:
             ref_schema = self._resolve_ref(schema["$ref"])
+
+            # Recursion guard
+            # In JSON Schema, it is okay to have recursive schemas, but we must avoid
+            # infinite loops if we're validating the same instance against the same schema.
+            state = (id(instance), id(ref_schema))
+            if state in seen:
+                return
+
+            new_seen = seen | {state}
             # According to some specs, other keywords are ignored when $ref is present.
             # In newer drafts, $ref can be adjacent to other keywords.
             # We'll follow the older convention for simplicity unless needed.
-            return self._validate(instance, ref_schema, path)
+            return self._validate(instance, ref_schema, path, new_seen)
 
         # Basic types
         validate_type(instance, schema, path)
@@ -78,13 +93,13 @@ class Validator:
         validate_number(instance, schema, path)
 
         # Array keywords
-        validate_array(instance, schema, path, self._validate)
+        validate_array(instance, schema, path, lambda i, s, p: self._validate(i, s, p, seen))
 
         # Object keywords
-        validate_object(instance, schema, path, self._validate)
+        validate_object(instance, schema, path, lambda i, s, p: self._validate(i, s, p, seen))
 
         # Combinators
-        validate_combinators(instance, schema, path, self._validate)
+        validate_combinators(instance, schema, path, lambda i, s, p: self._validate(i, s, p, seen))
 
 def validate(instance: Any, schema: Dict[str, Any]) -> None:
     """Convenience function to validate an instance against a schema."""

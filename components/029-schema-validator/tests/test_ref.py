@@ -74,3 +74,8 @@ def test_ref_pointer_encoding():
     validate({"a": "hello", "b": 123}, schema)
     with pytest.raises(ValidationError):
         validate({"a": 123}, schema)
+
+def test_ref_infinite_recursion_guard():
+    # This should not raise RecursionError but simply return (as per guard)
+    schema = {"$ref": "#"}
+    validate(123, schema)

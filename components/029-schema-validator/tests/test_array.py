@@ -18,10 +18,15 @@ def test_array_uniqueItems():
     validate([1, 2, 3], schema)
     validate(["a", "b", "c"], schema)
     validate([{"a": 1}, {"a": 2}], schema)
+    # Boolean vs integer distinction
+    validate([True, 1], schema)
+    validate([False, 0], schema)
     with pytest.raises(ValidationError):
         validate([1, 2, 1], schema)
     with pytest.raises(ValidationError):
         validate([{"a": 1}, {"a": 1}], schema)
+    with pytest.raises(ValidationError):
+        validate([True, True], schema)
 
 def test_array_items_schema():
     schema = {"type": "array", "items": {"type": "integer", "minimum": 10}}

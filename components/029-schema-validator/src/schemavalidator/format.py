@@ -1,4 +1,5 @@
 import re
+from datetime import date
 from typing import Callable, Dict
 
 # Simple regex for email (not fully RFC 5322 but common for standard validations)
@@ -29,7 +30,13 @@ def validate_uri(instance: str) -> bool:
 
 def validate_date(instance: str) -> bool:
     """Validates if the instance is a valid date (YYYY-MM-DD)."""
-    return bool(DATE_REGEX.match(instance))
+    if not DATE_REGEX.match(instance):
+        return False
+    try:
+        date.fromisoformat(instance)
+        return True
+    except ValueError:
+        return False
 
 FORMAT_VALIDATORS: Dict[str, Callable[[str], bool]] = {
     "email": validate_email,

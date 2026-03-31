@@ -1,4 +1,5 @@
 import re
+from decimal import Decimal
 from typing import Any, Dict, List, Callable, Union
 from .errors import ValidationError
 from .types import is_type, get_type
@@ -65,9 +66,10 @@ def validate_number(instance: Union[int, float], schema: Dict[str, Any], path: L
 
     # multipleOf
     if "multipleOf" in schema:
-        if (instance % schema["multipleOf"]) != 0:
-            if not float(instance / schema["multipleOf"]).is_integer():
-                 raise ValidationError(f"Value {instance} is not a multiple of {schema['multipleOf']}", path)
+        inst_dec = Decimal(str(instance))
+        mult_dec = Decimal(str(schema["multipleOf"]))
+        if (inst_dec % mult_dec) != 0:
+             raise ValidationError(f"Value {instance} is not a multiple of {schema['multipleOf']}", path)
 
 def validate_array(instance: List[Any], schema: Dict[str, Any], path: List[Any], validate_func: Callable) -> None:
     """Validates array-specific keywords."""
@@ -86,7 +88,14 @@ def validate_array(instance: List[Any], schema: Dict[str, Any], path: List[Any],
     if "uniqueItems" in schema and schema["uniqueItems"]:
         seen = []
         for item in instance:
-            if item in seen:
+            # Distinguish between True/1 and False/0 by checking both value and type
+            # Using a custom equality check that considers type for booleans
+            is_duplicate = False
+            for seen_item in seen:
+                if item == seen_item and type(item) is type(seen_item):
+                    is_duplicate = True
+                    break
+            if is_duplicate:
                 raise ValidationError("Array items are not unique", path)
             seen.append(item)
 
