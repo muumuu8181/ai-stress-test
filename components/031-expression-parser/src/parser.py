@@ -66,7 +66,10 @@ class Parser:
 
     def expression(self) -> ASTNode:
         """
-        expression : identifier ASSIGN expression | sum
+        Parse an expression (assignment or sum).
+
+        Returns:
+            ASTNode: The parsed expression node.
         """
         if self.current_token.type == TokenType.IDENTIFIER:
             # Check for assignment without advancing the main lexer.
@@ -86,7 +89,10 @@ class Parser:
 
     def sum(self) -> ASTNode:
         """
-        sum : term ( ( PLUS | MINUS ) term )*
+        Parse a sum (addition or subtraction).
+
+        Returns:
+            ASTNode: The parsed sum node.
         """
         node = self.term()
 
@@ -103,7 +109,10 @@ class Parser:
 
     def term(self) -> ASTNode:
         """
-        term : factor ( ( MULTIPLY | DIVIDE ) factor )*
+        Parse a term (multiplication or division).
+
+        Returns:
+            ASTNode: The parsed term node.
         """
         node = self.factor()
 
@@ -123,7 +132,10 @@ class Parser:
 
     def factor(self) -> ASTNode:
         """
-        factor : PLUS factor | MINUS factor | primary
+        Parse a factor (unary plus or minus, or primary).
+
+        Returns:
+            ASTNode: The parsed factor node.
         """
         token = self.current_token
         if token.type == TokenType.PLUS:
@@ -137,9 +149,10 @@ class Parser:
 
     def primary(self) -> ASTNode:
         """
-        primary : NUMBER
-                | identifier ( LPAREN ( expression ( COMMA expression )* )? RPAREN )?
-                | LPAREN expression RPAREN
+        Parse a primary expression (number, identifier, function call, or grouped expression).
+
+        Returns:
+            ASTNode: The parsed primary node.
         """
         token = self.current_token
 

@@ -36,11 +36,21 @@ class Lexer:
 
         Returns:
             Token: A NUMBER token with the float value.
+
+        Raises:
+            ValueError: If the numeric value is malformed.
         """
         result = ""
+        dot_count = 0
         while self.current_char and (
             self.current_char.isdigit() or self.current_char == "."
         ):
+            if self.current_char == ".":
+                dot_count += 1
+            if dot_count > 1:
+                raise ValueError(
+                    f"Malformed number: {result + self.current_char}"
+                )
             result += self.current_char
             self.advance()
         return Token(TokenType.NUMBER, float(result))
