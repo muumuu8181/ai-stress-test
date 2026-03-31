@@ -8,9 +8,10 @@ class Match:
     Match object returned by regex matching functions.
     Contains information about the match and captured groups.
     """
-    def __init__(self, string: str, groups: Dict[int, Tuple[int, int]]) -> None:
+    def __init__(self, string: str, groups: Dict[int, Tuple[int, int]], total_groups: int = 0) -> None:
         self._string = string
         self._groups = groups
+        self._total_groups = total_groups
 
     def group(self, index: int = 0) -> Optional[str]:
         if index not in self._groups:
@@ -22,8 +23,7 @@ class Match:
 
     def groups(self) -> Tuple[Optional[str], ...]:
         result = []
-        max_idx = max(self._groups.keys()) if self._groups else 0
-        for i in range(1, max_idx + 1):
+        for i in range(1, self._total_groups + 1):
             result.append(self.group(i))
         return tuple(result)
 
@@ -83,11 +83,9 @@ class NFASimulator:
             else:
                 results.append(match_obj.group(0) or "")
 
-            new_pos = match_obj.end(0)
-            if new_pos == pos: # Handle empty matches
-                pos += 1
-            else:
-                pos = new_pos
+            pos = match_obj.end(0)
+            if match_obj.end(0) == match_obj.start(0):
+                 pos += 1
         return results
 
     def sub(self, repl: Union[str, Callable[[Match], str]], string: str, count: int = 0) -> str:
@@ -110,12 +108,17 @@ class NFASimulator:
                 result.append(repl(match_obj))
             else:
                 # Handle \1, \2 etc in replacement string
-                # This is a bit complex for a simple sub, but let's do a basic version.
-                replaced = repl
-                for i in range(1, 10):
-                    if f"\\{i}" in replaced:
-                        replaced = replaced.replace(f"\\{i}", match_obj.group(i) or "")
-                result.append(replaced)
+                res = ""
+                i = 0
+                while i < len(repl):
+                    if repl[i] == "\\" and i + 1 < len(repl) and repl[i+1].isdigit():
+                        group_num = int(repl[i+1])
+                        res += match_obj.group(group_num) or ""
+                        i += 2
+                    else:
+                        res += repl[i]
+                        i += 1
+                result.append(res)
 
             pos = match_obj.end(0)
             subs_made += 1
@@ -131,6 +134,11 @@ class NFASimulator:
 
     def _run(self, string: str, start_pos: int) -> Optional[Match]:
         initial_groups = {0: (start_pos, -1)}
+        # Initialize optional groups as -1, -1 if they are known but not yet visited
+        for i in range(1, self.nfa.group_count + 1):
+             if i not in initial_groups:
+                 initial_groups[i] = (-1, -1)
+
         active_paths = self._epsilon_closure([(self.nfa.start_state, initial_groups)], string, start_pos)
 
         best_match_groups = None
@@ -138,14 +146,16 @@ class NFASimulator:
         pos = start_pos
         while True:
             # Check for matches in current paths
-            # We want the longest match (greedy).
-            for state, groups in active_paths:
+            # Priority: threads in active_paths are ordered by priority (leftmost-first).
+            for i, (state, groups) in enumerate(active_paths):
                 if state == self.nfa.end_state:
                     final_groups = groups.copy()
                     final_groups[0] = (start_pos, pos)
-                    # For a single starting position, we prefer the longest match.
-                    # Since we are iterating pos, the latest one we find that matches will be the longest so far.
+                    # This thread reached end_state.
+                    # All subsequent threads are lower priority, so they can be discarded for this pos.
                     best_match_groups = final_groups
+                    active_paths = active_paths[:i+1]
+                    break
 
             if pos >= len(string) or not active_paths:
                 break
@@ -175,12 +185,14 @@ class NFASimulator:
             active_paths = self._epsilon_closure(next_step_paths, string, pos)
 
         if best_match_groups:
-            return Match(string, best_match_groups)
+            return Match(string, best_match_groups, total_groups=self.nfa.group_count)
         return None
 
     def _epsilon_closure(self, paths: List[Tuple[State, Dict[int, Tuple[int, int]]]], string: str, pos: int) -> List[Tuple[State, Dict[int, Tuple[int, int]]]]:
         closure = []
-        stack = list(paths)
+        # Use a list to maintain order and act as a queue for BFS-style processing
+        # To support leftmost-first, we must process transitions in the order they were added.
+        stack = list(reversed(paths)) # stack.pop() will give the first item in paths
         seen = set()
 
         while stack:
@@ -201,7 +213,7 @@ class NFASimulator:
 
             closure.append((state, new_groups))
 
-            for transition_val, next_state in state.transitions:
+            for transition_val, next_state in reversed(state.transitions):
                 if transition_val is None:
                     stack.append((next_state, new_groups))
                 elif isinstance(transition_val, CaretNode):

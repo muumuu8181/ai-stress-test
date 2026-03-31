@@ -37,6 +37,8 @@ def test_alternation():
     assert match("a|b", "a").group() == "a"
     assert match("a|b", "b").group() == "b"
     assert match("a|b", "c") is None
+    # Leftmost-first priority
+    assert match("a|ab", "abc").group() == "a"
 
 def test_char_class():
     assert match("[abc]", "a").group() == "a"
@@ -57,6 +59,9 @@ def test_groups():
 def test_findall():
     assert findall(r"\d+", "12abc34def56") == ["12", "34", "56"]
     assert findall(r"(\d)(\d)", "1234") == [("1", "2"), ("3", "4")]
+    # Zero-width findall
+    assert findall(r"$", "ab") == [""]
+    assert findall(r"a?", "ab") == ["a", "", ""]
 
 def test_sub():
     assert sub(r"\d+", "NUM", "12abc34") == "NUMabcNUM"

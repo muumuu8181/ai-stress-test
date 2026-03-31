@@ -16,6 +16,12 @@ def test_invalid_pattern():
         compile("[abc")
     with pytest.raises(ValueError):
         compile("a{x}")
+    # Brace range validation
+    with pytest.raises(ValueError):
+        compile("a{3,2}")
+    # Empty character class validation
+    with pytest.raises(ValueError):
+        compile("[]")
 
 def test_large_quantifier():
     assert match("a{10}", "aaaaaaaaaa").group() == "aaaaaaaaaa"

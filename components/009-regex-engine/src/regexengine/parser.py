@@ -155,6 +155,8 @@ class Parser:
 
             if num_str:
                 max_count = int(num_str)
+                if max_count < min_count:
+                    raise ValueError(f"Max count {max_count} is less than min count {min_count}")
             else:
                 max_count = None # {n,}
         elif self.peek().type == TokenType.RBRACE:
@@ -239,5 +241,7 @@ class Parser:
             else:
                 chars.append(start_char)
 
+        if not chars and not ranges:
+            raise ValueError("Empty character class")
         self.consume(TokenType.RBRACKET)
         return CharClassNode(chars, ranges, negated)

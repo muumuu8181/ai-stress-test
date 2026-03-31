@@ -15,15 +15,34 @@ class State:
 
 class NFA:
     """Represents a Non-deterministic Finite Automaton fragment."""
-    def __init__(self, start_state: State, end_state: State) -> None:
+    def __init__(self, start_state: State, end_state: State, group_count: int = 0) -> None:
         self.start_state = start_state
         self.end_state = end_state
+        self.group_count = group_count
 
 class NFACompiler:
     """
     Compiles an AST into an NFA using Thompson's construction.
     """
     def compile(self, node: ASTNode) -> NFA:
+        # Determine total group count from the root node if it's the top-level call
+        group_count = self._count_groups(node)
+        nfa = self._compile_node(node)
+        nfa.group_count = group_count
+        return nfa
+
+    def _count_groups(self, node: ASTNode) -> int:
+        if isinstance(node, GroupNode):
+            return 1 + self._count_groups(node.node)
+        elif isinstance(node, ConcatenationNode):
+            return sum(self._count_groups(n) for n in node.nodes)
+        elif isinstance(node, AlternationNode):
+            return sum(self._count_groups(n) for n in node.nodes)
+        elif isinstance(node, QuantifierNode):
+            return self._count_groups(node.node)
+        return 0
+
+    def _compile_node(self, node: ASTNode) -> NFA:
         if isinstance(node, LiteralNode):
             start = State()
             end = State()
@@ -63,7 +82,7 @@ class NFACompiler:
                 s = State()
                 return NFA(s, s)
 
-            nfas = [self.compile(n) for n in node.nodes]
+            nfas = [self._compile_node(n) for n in node.nodes]
             for i in range(len(nfas) - 1):
                 nfas[i].end_state.add_transition(None, nfas[i+1].start_state)
             return NFA(nfas[0].start_state, nfas[-1].end_state)
@@ -72,7 +91,7 @@ class NFACompiler:
             start = State()
             end = State()
             for n in node.nodes:
-                fragment = self.compile(n)
+                fragment = self._compile_node(n)
                 start.add_transition(None, fragment.start_state)
                 fragment.end_state.add_transition(None, end)
             return NFA(start, end)
@@ -81,7 +100,7 @@ class NFACompiler:
             return self._compile_quantifier(node)
 
         elif isinstance(node, GroupNode):
-            fragment = self.compile(node.node)
+            fragment = self._compile_node(node.node)
             start = State()
             end = State()
             start.add_save_marker(node.group_index, True)
@@ -93,7 +112,7 @@ class NFACompiler:
         raise ValueError(f"Unknown AST node type: {type(node)}")
 
     def _compile_quantifier(self, node: QuantifierNode) -> NFA:
-        fragment = self.compile(node.node)
+        fragment = self._compile_node(node.node)
 
         if node.min_count == 0 and node.max_count is None: # *
             start = State()
@@ -134,20 +153,21 @@ class NFACompiler:
 
         nfas = []
         for _ in range(node.min_count):
-            nfas.append(self.compile(clone_ast(node.node)))
+            nfas.append(self._compile_node(clone_ast(node.node)))
 
         if node.max_count is None:
-            # {n,} -> n copies followed by +
-            star_fragment = self.compile(clone_ast(node.node))
+            # {n,} -> n copies followed by (node.node)*
+            star_fragment = self._compile_node(clone_ast(node.node))
             s = State()
             e = State()
             s.add_transition(None, star_fragment.start_state)
+            s.add_transition(None, e) # Bypass for zero extra repetitions
             star_fragment.end_state.add_transition(None, star_fragment.start_state)
             star_fragment.end_state.add_transition(None, e)
             nfas.append(NFA(s, e))
         else:
             for _ in range(node.max_count - node.min_count):
-                opt_fragment = self.compile(clone_ast(node.node))
+                opt_fragment = self._compile_node(clone_ast(node.node))
                 s = State()
                 e = State()
                 s.add_transition(None, opt_fragment.start_state)
