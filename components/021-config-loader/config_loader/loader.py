@@ -1,5 +1,6 @@
 import os
 import sys
+import copy
 from typing import Any, Dict, List, Optional, Union, Callable
 from pathlib import Path
 
@@ -40,6 +41,7 @@ class ConfigLoader:
         self._raw_config: Dict[str, Any] = {}
         self._last_loaded_files: List[str] = []
         self._default_config: Dict[str, Any] = {}
+        self._last_cli_args: Optional[List[str]] = None
         self._watcher: Optional[ConfigWatcher] = None
         self._on_reload_callbacks: List[Callable[['Config'], None]] = []
 
@@ -53,8 +55,10 @@ class ConfigLoader:
         return dict1
 
     def _get_parser(self, file_path: Path):
-        """Returns the appropriate parser for a given file path based on its extension."""
+        """Returns the appropriate parser for a given file path based on its extension or name."""
         ext = file_path.suffix.lower()
+        name = file_path.name
+
         if ext == ".json":
             return parse_json
         elif ext == ".toml":
@@ -63,10 +67,10 @@ class ConfigLoader:
             return parse_ini
         elif ext in (".yaml", ".yml"):
             return parse_yaml_subset
-        elif file_path.name == ".env":
+        elif name == ".env" or name.startswith(".env."):
             return parse_env
         else:
-            raise ValueError(f"Unsupported file format: {ext}")
+            raise ValueError(f"Unsupported file format: {name}")
 
     def load_file(self, file_path: Path) -> Dict[str, Any]:
         """Loads and parses a single configuration file."""
@@ -92,11 +96,24 @@ class ConfigLoader:
                 parts = config_key.split("__")
 
                 current = env_config
-                for part in parts[:-1]:
+                for i, part in enumerate(parts[:-1]):
                     if part not in current:
                         current[part] = {}
+                    elif not isinstance(current[part], dict):
+                        # Handle overlap error: e.g. APP_DB=sqlite and APP_DB__HOST=...
+                        # In this case, we prefer the nested one or log/raise.
+                        # For now, let's reset to dict to allow nesting.
+                        current[part] = {}
                     current = current[part]
-                current[parts[-1]] = value
+
+                last_part = parts[-1]
+                if last_part in current and isinstance(current[last_part], dict):
+                    # Overlap: we have a scalar but there was already a dict.
+                    # Ignore the scalar or merge?
+                    # Usually, more specific (deeper) config is preferred.
+                    pass
+                else:
+                    current[last_part] = value
         return env_config
 
     def load_cli_args(self, args: Optional[List[str]] = None) -> Dict[str, Any]:
@@ -118,11 +135,16 @@ class ConfigLoader:
 
                 parts = key_path.split(".")
                 current = cli_config
-                for part in parts[:-1]:
+                for i, part in enumerate(parts[:-1]):
                     if part not in current:
                         current[part] = {}
+                    elif not isinstance(current[part], dict):
+                        current[part] = {}
                     current = current[part]
-                current[parts[-1]] = value
+
+                last_part = parts[-1]
+                if not (last_part in current and isinstance(current[last_part], dict)):
+                    current[last_part] = value
         return cli_config
 
     def load(
@@ -133,6 +155,7 @@ class ConfigLoader:
     ) -> 'Config':
         """
         Loads configuration from all sources following the priority hierarchy.
+        Hierarchy: Default < Base Files < Profile Files < Env < CLI
 
         Args:
             default_config (Optional[Dict[str, Any]]): Base default configuration.
@@ -142,12 +165,17 @@ class ConfigLoader:
         Returns:
             Config: A Config wrapper around the merged configuration data.
         """
-        config = default_config.copy() if default_config else {}
-        self._default_config = default_config.copy() if default_config else {}
+        # Deep copy to avoid side effects on the passed default_config
+        config = copy.deepcopy(default_config) if default_config else {}
+        self._default_config = copy.deepcopy(default_config) if default_config else {}
         self._last_loaded_files = config_files.copy() if config_files else []
+        self._last_cli_args = cli_args # Stored to persist during hot-reloads
 
         self.config_files = []
+        profile_files: List[Path] = []
+
         if config_files:
+            # First pass: load all base files
             for file_name in config_files:
                 path = self.base_path / file_name
                 if path.exists():
@@ -155,21 +183,31 @@ class ConfigLoader:
                     file_data = self.load_file(path)
                     self._merge_dicts(config, file_data)
 
+                # Identify profile-specific files for the second pass
                 stem = path.stem
                 suffix = path.suffix
-                profile_file_name = f"{stem}.{self.profile}{suffix}"
+                # If path.name is ".env", stem is "" and suffix is ".env"
+                # -> profile_file_name should be ".env.dev"
+                if not stem and suffix == ".env":
+                    profile_file_name = f".env.{self.profile}"
+                else:
+                    profile_file_name = f"{stem}.{self.profile}{suffix}"
+
                 profile_path = path.parent / profile_file_name
-
                 if profile_path.exists():
-                    self.config_files.append(profile_path)
-                    profile_data = self.load_file(profile_path)
-                    self._merge_dicts(config, profile_data)
+                    profile_files.append(profile_path)
 
-        # 2. Load from environment variables
+            # Second pass: load all profile-specific files (higher precedence)
+            for p_path in profile_files:
+                self.config_files.append(p_path)
+                profile_data = self.load_file(p_path)
+                self._merge_dicts(config, profile_data)
+
+        # 2. Load from environment variables (higher precedence than files)
         env_data = self.load_environment()
         self._merge_dicts(config, env_data)
 
-        # 3. Load from CLI arguments
+        # 3. Load from CLI arguments (highest precedence)
         cli_data = self.load_cli_args(cli_args)
         self._merge_dicts(config, cli_data)
 
@@ -183,6 +221,7 @@ class ConfigLoader:
     def watch(self, interval: float = 1.0):
         """
         Starts watching loaded configuration files for changes.
+        When a change is detected, reloads the config (persisting CLI overrides) and calls callbacks.
 
         Args:
             interval (float): Polling interval in seconds.
@@ -191,9 +230,11 @@ class ConfigLoader:
             self._watcher.stop()
 
         def _reload_callback():
+            # Re-load with the same parameters, including CLI args to ensure they persist
             new_config = self.load(
                 default_config=self._default_config,
-                config_files=self._last_loaded_files
+                config_files=self._last_loaded_files,
+                cli_args=self._last_cli_args
             )
             for cb in self._on_reload_callbacks:
                 cb(new_config)
@@ -216,8 +257,13 @@ class ConfigLoader:
             self._watcher = None
 
     def load_from_files_only(self) -> Dict[str, Any]:
-        """Utility for diffing: loads configuration strictly from files and defaults."""
-        config = self._default_config.copy()
+        """
+        Utility for diffing: loads configuration strictly from files and defaults.
+        Maintains correct precedence: Default < Base Files < Profile Files.
+        """
+        config = copy.deepcopy(self._default_config)
+        profile_files = []
+
         for file_name in self._last_loaded_files:
             path = self.base_path / file_name
             if path.exists():
@@ -226,12 +272,18 @@ class ConfigLoader:
 
             stem = path.stem
             suffix = path.suffix
-            profile_file_name = f"{stem}.{self.profile}{suffix}"
-            profile_path = path.parent / profile_file_name
+            if not stem and suffix == ".env":
+                profile_file_name = f".env.{self.profile}"
+            else:
+                profile_file_name = f"{stem}.{self.profile}{suffix}"
 
+            profile_path = path.parent / profile_file_name
             if profile_path.exists():
-                profile_data = self.load_file(profile_path)
-                self._merge_dicts(config, profile_data)
+                profile_files.append(profile_path)
+
+        for p_path in profile_files:
+            profile_data = self.load_file(p_path)
+            self._merge_dicts(config, profile_data)
 
         if self.schema:
             try:
@@ -291,6 +343,7 @@ class Config:
     def diff(self) -> Dict[str, Any]:
         """
         Compares currently used configuration with what is currently in source files.
+        Shows differences introduced by Environment Variables, CLI arguments, or recent file changes.
 
         Returns:
             Dict[str, Any]: A dictionary detailing the changes.

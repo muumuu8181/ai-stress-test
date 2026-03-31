@@ -24,18 +24,39 @@ def test_loader_merging(config_dir):
     assert config.app.port == 9000
     assert config.app.debug == True
 
-def test_loader_profile(config_dir):
-    json_file = config_dir / "config.json"
-    json_file.write_text('{"env": "prod"}')
+def test_loader_profile_precedence(config_dir):
+    # Two-pass loading check: profile file should override all base files.
+    # a.json (env=prod)
+    # a.dev.json (env=dev)
+    # b.json (env=prod_again)
+    # If it was one-pass, it would be a.json -> a.dev.json -> b.json, and result env=prod_again.
+    # If it is two-pass, it is a.json -> b.json -> a.dev.json, and result env=dev.
 
-    dev_json_file = config_dir / "config.dev.json"
-    dev_json_file.write_text('{"env": "dev"}')
+    a_file = config_dir / "a.json"
+    a_file.write_text('{"env": "prod"}')
 
-    # Force profile 'dev'
+    b_file = config_dir / "b.json"
+    b_file.write_text('{"env": "prod_again"}')
+
+    a_dev_file = config_dir / "a.dev.json"
+    a_dev_file.write_text('{"env": "dev"}')
+
     loader = ConfigLoader(base_path=config_dir, profile="dev")
-    config = loader.load(config_files=["config.json"])
+    config = loader.load(config_files=["a.json", "b.json"])
 
     assert config.env == "dev"
+
+def test_loader_env_profile(config_dir):
+    env_file = config_dir / ".env"
+    env_file.write_text("FOO=bar")
+
+    env_dev_file = config_dir / ".env.dev"
+    env_dev_file.write_text("FOO=baz")
+
+    loader = ConfigLoader(base_path=config_dir, profile="dev")
+    config = loader.load(config_files=[".env"])
+
+    assert config.FOO == "baz"
 
 def test_loader_env_vars(config_dir):
     os.environ["APP_DATABASE__HOST"] = "db.host"
@@ -49,6 +70,21 @@ def test_loader_env_vars(config_dir):
 
     # Cleanup
     del os.environ["APP_DATABASE__HOST"]
+    del os.environ["APP_DATABASE__PORT"]
+
+def test_loader_env_vars_overlap(config_dir):
+    os.environ["APP_DATABASE"] = "db.host"
+    os.environ["APP_DATABASE__PORT"] = "5432"
+
+    loader = ConfigLoader(env_prefix="APP_")
+    config = loader.load()
+
+    # Overlap handled by preferring the nested one.
+    assert isinstance(config.database.to_dict(), dict)
+    assert config.database.port == "5432"
+
+    # Cleanup
+    del os.environ["APP_DATABASE"]
     del os.environ["APP_DATABASE__PORT"]
 
 def test_loader_cli_args(config_dir):
@@ -85,13 +121,14 @@ def test_loader_full_hierarchy(config_dir):
     del os.environ["APP_C"]
     del os.environ["APP_D"]
 
-def test_hot_reloading(config_dir):
+def test_hot_reloading_cli_persistence(config_dir):
     f = config_dir / "config.json"
     f.write_text('{"val": 1}')
 
     loader = ConfigLoader(base_path=config_dir)
-    config = loader.load(config_files=["config.json"])
-    assert config.val == 1
+    # CLI override should persist even after file changes
+    config = loader.load(config_files=["config.json"], cli_args=["--val=999"])
+    assert config.val == "999"
 
     reloaded_vals = []
     def on_reload(new_cfg):
@@ -111,7 +148,8 @@ def test_hot_reloading(config_dir):
             time.sleep(0.1)
             max_wait -= 1
 
-        assert 2 in reloaded_vals
+        # Even after reload, CLI arg "999" should persist.
+        assert "999" in reloaded_vals
     finally:
         loader.stop_watching()
 
@@ -127,7 +165,6 @@ def test_diff(config_dir):
     assert d["val"]["current"] == "2"
     assert d["val"]["file"] == 1
     assert d["val"]["status"] == "modified"
-    # "other" should not be in diff as it's the same
     assert "other" not in d
 
 def test_edge_cases(config_dir):
@@ -148,3 +185,14 @@ def test_edge_cases(config_dir):
     f.write_text('{"bad": ')
     with pytest.raises(Exception):
         loader.load(config_files=["bad.json"])
+
+def test_default_config_immutability():
+    # Pass a dict with nested dict. Ensure it's not mutated.
+    default = {"database": {"host": "localhost"}}
+    loader = ConfigLoader()
+
+    # Merge something into database
+    config = loader.load(default_config=default, cli_args=["--database.port=5432"])
+
+    assert config.database.port == "5432"
+    assert "port" not in default["database"] # Should remain "localhost" only

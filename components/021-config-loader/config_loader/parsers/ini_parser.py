@@ -1,5 +1,4 @@
 import configparser
-import io
 from typing import Any, Dict
 
 def parse_ini(content: str) -> Dict[str, Any]:
