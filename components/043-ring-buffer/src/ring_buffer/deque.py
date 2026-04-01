@@ -183,44 +183,45 @@ class ThreadSafeRingDeque(RingDeque[T]):
 
     def append(self, item: T) -> None:
         with self._lock:
-            super().append(item)
+            # Call RingDeque.append directly to avoid super() overhead in subclasses
+            RingDeque.append(self, item)
 
     def appendleft(self, item: T) -> None:
         with self._lock:
-            super().appendleft(item)
+            RingDeque.appendleft(self, item)
 
     def pop(self) -> T:
         with self._lock:
-            return super().pop()
+            return RingDeque.pop(self)
 
     def popleft(self) -> T:
         with self._lock:
-            return super().popleft()
+            return RingDeque.popleft(self)
 
     def peek(self) -> T:
         with self._lock:
-            return super().peek()
+            return RingDeque.peek(self)
 
     def peekleft(self) -> T:
         with self._lock:
-            return super().peekleft()
+            return RingDeque.peekleft(self)
 
     def __len__(self) -> int:
         with self._lock:
-            return super().__len__()
+            return RingDeque.__len__(self)
 
     def is_full(self) -> bool:
         with self._lock:
-            return super().is_full()
+            return RingDeque.is_full(self)
 
     def is_empty(self) -> bool:
         with self._lock:
-            return super().is_empty()
+            return RingDeque.is_empty(self)
 
     def __iter__(self) -> Iterator[T]:
         with self._lock:
             # Snapshot to be thread-safe during iteration
-            return iter(list(super().__iter__()))
+            return iter(list(RingDeque.__iter__(self)))
 
 
 class BlockingRingDeque(ThreadSafeRingDeque[T]):
@@ -237,23 +238,23 @@ class BlockingRingDeque(ThreadSafeRingDeque[T]):
 
     def append(self, item: T) -> None:
         with self._lock:
-            super().append(item)
+            RingDeque.append(self, item)
             self._not_empty.notify()
 
     def appendleft(self, item: T) -> None:
         with self._lock:
-            super().appendleft(item)
+            RingDeque.appendleft(self, item)
             self._not_empty.notify()
 
     def pop(self) -> T:
         with self._lock:
-            item = super().pop()
+            item = RingDeque.pop(self)
             self._not_full.notify()
             return item
 
     def popleft(self) -> T:
         with self._lock:
-            item = super().popleft()
+            item = RingDeque.popleft(self)
             self._not_full.notify()
             return item
 
@@ -266,18 +267,18 @@ class BlockingRingDeque(ThreadSafeRingDeque[T]):
             Full: If deque is full and cannot be added (timeout or non-blocking).
         """
         with self._lock:
-            if self.is_full() and self._strategy != OverflowStrategy.OVERWRITE:
+            if RingDeque.is_full(self) and self._strategy != OverflowStrategy.OVERWRITE:
                 if not block:
                     raise Full("Deque is full")
 
                 if timeout is None:
-                    while self.is_full():
+                    while RingDeque.is_full(self):
                         self._not_full.wait()
                 elif timeout < 0:
                     raise ValueError("'timeout' must be a non-negative number")
                 else:
                     endtime = time.time() + timeout
-                    while self.is_full():
+                    while RingDeque.is_full(self):
                         remaining = endtime - time.time()
                         if remaining <= 0.0:
                             raise Full("Deque is full (timeout)")
@@ -285,7 +286,7 @@ class BlockingRingDeque(ThreadSafeRingDeque[T]):
 
             # Now we can append. If it was OVERWRITE, it would have worked anyway.
             # If it was ERROR/DISCARD, we waited until there was space.
-            super().append(item)
+            RingDeque.append(self, item)
             self._not_empty.notify()
 
     def get(self, block: bool = True, timeout: Optional[float] = None) -> T:
@@ -297,23 +298,23 @@ class BlockingRingDeque(ThreadSafeRingDeque[T]):
             Empty: If deque is empty and timeout expires or block is False.
         """
         with self._lock:
-            if self.is_empty():
+            if RingDeque.is_empty(self):
                 if not block:
                     raise Empty("Deque is empty")
 
                 if timeout is None:
-                    while self.is_empty():
+                    while RingDeque.is_empty(self):
                         self._not_empty.wait()
                 elif timeout < 0:
                     raise ValueError("'timeout' must be a non-negative number")
                 else:
                     endtime = time.time() + timeout
-                    while self.is_empty():
+                    while RingDeque.is_empty(self):
                         remaining = endtime - time.time()
                         if remaining <= 0.0:
                             raise Empty("Deque is empty (timeout)")
                         self._not_empty.wait(remaining)
 
-            item = super().popleft()
+            item = RingDeque.popleft(self)
             self._not_full.notify()
             return item
