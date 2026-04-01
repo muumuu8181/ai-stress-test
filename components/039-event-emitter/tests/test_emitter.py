@@ -279,3 +279,37 @@ def test_once_async_race():
 
     asyncio.run(run_race())
     assert len(called) == 1
+
+def test_emit_no_loop_sync_async_listener(caplog):
+    emitter = EventEmitter()
+
+    async def async_listener():
+        pass
+
+    emitter.on('test', async_listener)
+
+    # This should log an error but not raise RuntimeError: no running event loop
+    emitter.emit('test')
+    assert "Cannot schedule async listener in sync emit: no running event loop" in caplog.text
+
+def test_emit_async_error_awaits_tasks():
+    emitter = EventEmitter()
+
+    called = []
+    async def slow_listener():
+        await asyncio.sleep(0.1)
+        called.append('slow')
+
+    def crashing_listener():
+        raise ValueError("Crash")
+
+    emitter.on('test', slow_listener)
+    emitter.on('test', crashing_listener)
+
+    # Even if crashing_listener raises an exception,
+    # slow_listener should still be awaited and finish.
+    # If no 'error' listener is present, emit_async will raise the error.
+    with pytest.raises(ValueError):
+        asyncio.run(emitter.emit_async('test'))
+
+    assert called == ['slow']

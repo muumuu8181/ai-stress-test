@@ -204,7 +204,15 @@ class EventEmitter:
                 result = listener(*args, **kwargs)
                 if asyncio.iscoroutine(result):
                     # We can't await here since emit is sync, but we can schedule it
-                    asyncio.create_task(result)
+                    try:
+                        loop = asyncio.get_running_loop()
+                        loop.create_task(result)
+                    except RuntimeError:
+                        # No running event loop, we can't schedule it.
+                        # We should either log it or close it.
+                        # Closing is better than leaking.
+                        result.close()
+                        logger.error("Cannot schedule async listener in sync emit: no running event loop")
             except Exception as e:
                 if event == 'error':
                     raise e
@@ -243,23 +251,26 @@ class EventEmitter:
             return False
 
         tasks = []
+        errors = []
         for listener in listeners:
             try:
                 result = listener(*args, **kwargs)
                 if asyncio.iscoroutine(result):
                     tasks.append(result)
             except Exception as e:
-                if event == 'error':
-                    raise e
-                self.emit('error', e)
+                errors.append(e)
 
         if tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)
             for res in results:
                 if isinstance(res, Exception):
-                    if event == 'error':
-                        raise res
-                    self.emit('error', res)
+                    errors.append(res)
+
+        if errors:
+            for error in errors:
+                if event == 'error':
+                    raise error
+                await self.emit_async('error', error)
 
         return True
 
