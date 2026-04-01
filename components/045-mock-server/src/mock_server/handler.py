@@ -12,7 +12,7 @@ class MockHTTPHandler(BaseHTTPRequestHandler):
         body = self.rfile.read(content_length) if content_length > 0 else b""
 
         parsed_url = urllib.parse.urlparse(self.path)
-        query = urllib.parse.parse_qs(parsed_url.query)
+        query = urllib.parse.parse_qs(parsed_url.query, keep_blank_values=True)
 
         return Request(
             method=self.command,
@@ -44,7 +44,7 @@ class MockHTTPHandler(BaseHTTPRequestHandler):
             self.send_header(key, value)
 
         body_bytes = response.get_body_bytes()
-        if "Content-Length" not in response.headers:
+        if not any(k.lower() == "content-length" for k in response.headers):
             self.send_header("Content-Length", str(len(body_bytes)))
         self.end_headers()
 

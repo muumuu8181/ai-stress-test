@@ -58,11 +58,16 @@ class MockServer:
             self._history.append(request)
 
     def match_request(self, request: Request) -> Tuple[Optional[Rule], Response]:
+        rule = None
         with self._lock:
-            for rule in self._rules:
-                if rule.matches(request):
-                    return rule, rule.get_response(request)
-            return None, self._default_response
+            for r in self._rules:
+                if r.matches(request):
+                    rule = r
+                    break
+
+        if rule:
+            return rule, rule.get_response(request)
+        return None, self._default_response
 
     def get_history(self) -> RequestHistory:
         with self._lock:
@@ -157,6 +162,9 @@ class MockServer:
 
     def sequential(self, method: str, path: str, responses: List[Response]) -> 'MockServer':
         """Helper to add a sequential response rule."""
+        if not responses:
+            raise ValueError("The responses list cannot be empty for a sequential rule.")
+
         def matcher(req: Request) -> bool:
             return req.method.upper() == method.upper() and req.path == path
 
