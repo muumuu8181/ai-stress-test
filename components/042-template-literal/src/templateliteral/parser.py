@@ -59,9 +59,11 @@ class Parser:
         """Parses a sequence of nodes until a stop token is encountered or EOF."""
         if stop_tokens is None:
             stop_tokens = []
-        nodes = []
+        nodes: List[Node] = []
         while self.pos < len(self.tokens):
             token = self._peek()
+            if not token:
+                break
 
             if token.type in stop_tokens:
                 break

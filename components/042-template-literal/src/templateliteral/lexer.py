@@ -64,18 +64,25 @@ class Lexer:
         return self.tokens
 
     def _tokenize_expression(self) -> None:
-        """Tokenizes ${...} expression."""
+        """Tokenizes ${...} expression, handling nested braces and strings."""
         start_line, start_col = self.line, self.column
         self.tokens.append(Token(TokenType.EXPR_START, "${", self.line, self.column))
         self._advance(2)
 
         content_start = self.pos
+        brace_level = 0
         while self.pos < len(self.template):
-            if self.template.startswith("}", self.pos):
-                break
-            # Handle strings inside expressions to avoid premature closing
             char = self.template[self.pos]
-            if char in ('"', "'"):
+            if char == "}" and brace_level == 0:
+                break
+
+            if char == "{":
+                brace_level += 1
+                self._advance(1)
+            elif char == "}":
+                brace_level -= 1
+                self._advance(1)
+            elif char in ('"', "'"):
                 quote = char
                 self._advance(1)
                 while self.pos < len(self.template):
@@ -154,8 +161,8 @@ class Lexer:
             content = self.template[self.pos:]
             self.pos = len(self.template)
         else:
-            content = self.template[self.pos:next_tag]
-            self.pos = next_tag
+            content = self.template[self.pos:int(next_tag)]
+            self.pos = int(next_tag)
 
         if content:
             self.tokens.append(Token(TokenType.TEXT, content, start_line, start_col))
