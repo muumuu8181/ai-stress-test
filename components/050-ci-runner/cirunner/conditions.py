@@ -23,10 +23,12 @@ def evaluate_condition(condition: str, variables: Dict[str, str], env: Dict[str,
         var_name = match.group(1).strip()
         if var_name.startswith('env.'):
             env_key = var_name[4:]
-            return env.get(env_key, os.environ.get(env_key, ''))
-        return variables.get(var_name, '')
+            val = env.get(env_key, os.environ.get(env_key, ''))
+        else:
+            val = variables.get(var_name, '')
+        return str(val)
 
-    substituted = re.sub(pattern, replace_var, condition)
+    substituted = re.sub(pattern, replace_var, str(condition))
 
     # 2. Simple evaluation logic
     # Check for equality: A == B or A != B
@@ -48,14 +50,20 @@ def evaluate_condition(condition: str, variables: Dict[str, str], env: Dict[str,
         return False
     return True
 
-def should_run(if_cond: Optional[str], unless_cond: Optional[str], variables: Dict[str, str], env: Dict[str, str]) -> bool:
+def should_run(if_cond: Any, unless_cond: Any, variables: Dict[str, str], env: Dict[str, str]) -> bool:
     """Determines if a job should run based on if/unless conditions."""
-    if if_cond:
-        if not evaluate_condition(if_cond, variables, env):
+    if if_cond is not None:
+        if isinstance(if_cond, bool):
+            if not if_cond:
+                return False
+        elif not evaluate_condition(str(if_cond), variables, env):
             return False
 
-    if unless_cond:
-        if evaluate_condition(unless_cond, variables, env):
+    if unless_cond is not None:
+        if isinstance(unless_cond, bool):
+            if unless_cond:
+                return False
+        elif evaluate_condition(str(unless_cond), variables, env):
             return False
 
     return True

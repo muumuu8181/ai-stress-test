@@ -47,7 +47,9 @@ def parse_yaml(content: str) -> Dict[str, Any]:
             if stripped.startswith('-'):
                 is_list = True
                 val_str = stripped[1:].strip()
-                if ':' in val_str:
+                # Check for mapping, but be careful of colons in commands (e.g., URLs)
+                # In YAML, if it's "- key: value", there must be a space after the colon.
+                if ': ' in val_str:
                     # Case: - key: value
                     # The dict starts with this line (minus the dash)
                     dict_lines = [line.replace('-', ' ', 1)]

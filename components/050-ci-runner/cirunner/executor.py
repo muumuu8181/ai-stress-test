@@ -74,7 +74,8 @@ class Executor:
                 text=True,
                 env=job_env,
                 bufsize=1,
-                universal_newlines=True
+                universal_newlines=True,
+                preexec_fn=os.setsid if hasattr(os, 'setsid') else None
             )
 
             # Read logs in real-time
@@ -93,7 +94,16 @@ class Executor:
                 if process.returncode != 0:
                     status = 'failed'
             except subprocess.TimeoutExpired:
-                process.kill()
+                # On Unix, we should kill the process group if we used start_new_session
+                # But here we didn't.
+                # For a better cleanup, we use process.kill() but acknowledged it might leave orphans.
+                # To really kill process tree, we might need OS-specific commands.
+                import signal
+                try:
+                    # Try to kill the process group if we are on Unix
+                    os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                except (AttributeError, ProcessLookupError, PermissionError):
+                    process.kill()
                 log_thread.join()
                 status = 'timed_out'
                 logs.append(f"\nJob timed out after {job.timeout}s\n")
