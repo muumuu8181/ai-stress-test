@@ -2,6 +2,7 @@ import pytest
 import subprocess
 import os
 import json
+from datetime import datetime
 
 @pytest.fixture
 def apache_log_file(tmp_path):
@@ -63,3 +64,22 @@ def test_cli_detect_anomaly(json_log_file):
     result = run_logalyzer(["detect-anomaly", json_log_file, "--format", "json"])
     assert result.returncode == 0
     assert "Latency Increases Detected" in result.stdout
+
+def test_cli_filtering_time_range(json_log_file):
+    # Only the entries between 10:00:00 and 10:00:01 (2 entries)
+    result = run_logalyzer(["analyze", json_log_file, "--format", "json", "--start", "2023-01-01T10:00:00", "--end", "2023-01-01T10:00:01", "--json"])
+    assert result.returncode == 0
+    data = json.loads(result.stdout)
+    assert data["total_count"] == 2
+
+def test_cli_custom_pattern(tmp_path):
+    log_content = "2023-05-20 [ERROR] App failed\n"
+    p = tmp_path / "custom.log"
+    p.write_text(log_content)
+
+    pattern = '(?P<timestamp>.*) \[(?P<level>.*)\] (?P<message>.*)'
+    result = run_logalyzer(["analyze", str(p), "--format", "custom", "--custom-pattern", pattern, "--json"])
+    assert result.returncode == 0
+    data = json.loads(result.stdout)
+    assert data["total_count"] == 1
+    assert data["levels"]["ERROR"] == 1

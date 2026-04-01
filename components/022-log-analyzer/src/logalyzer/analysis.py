@@ -6,13 +6,13 @@ class AnomalyDetector:
     """
     Analyzes log streams to detect anomalies like spikes or latency increases.
     """
-    def __init__(self, spike_threshold: float = 3.0, latency_threshold: float = 2.0):
+    def __init__(self, spike_threshold: float = 2.0, latency_threshold: float = 1.5):
         """
         Initializes the detector.
 
         Args:
-            spike_threshold: Threshold factor for spikes (e.g., 3.0 means 3x average).
-            latency_threshold: Threshold factor for latency (e.g., 2.0 means 2x average).
+            spike_threshold: Threshold factor for spikes (e.g., 2.0 means 2x average).
+            latency_threshold: Threshold factor for latency (e.g., 1.5 means 1.5x average).
         """
         self.spike_threshold = spike_threshold
         self.latency_threshold = latency_threshold
