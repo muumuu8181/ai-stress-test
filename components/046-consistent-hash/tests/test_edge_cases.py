@@ -10,8 +10,8 @@ def test_empty_input_key():
 def test_null_input_key():
     hasher = ConsistentHasher()
     hasher.add_node("node1")
-    # Python's None can't be hashed by our _hash method (key.encode("utf-8"))
-    with pytest.raises(AttributeError):
+    # Non-string input should raise TypeError
+    with pytest.raises(TypeError, match="Key must be a string"):
         hasher.get_nodes(None)
 
 def test_invalid_vnodes_count():
@@ -46,3 +46,10 @@ def test_complex_node_names():
     nodes = hasher.get_nodes("key", replicas=3)
     assert len(nodes) == 3
     assert "🚀" in nodes
+
+def test_single_vnode_coverage():
+    # Test that a single vnode correctly reports 100% coverage
+    hasher = ConsistentHasher(vnodes=1)
+    hasher.add_node("node1")
+    stats = hasher.get_stats()
+    assert stats["coverage_percentage"]["node1"] == pytest.approx(100.0)

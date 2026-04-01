@@ -1,6 +1,5 @@
 import hashlib
 import bisect
-import json
 from typing import List, Dict, Any, Optional, Callable, Set
 
 
@@ -57,6 +56,8 @@ class ConsistentHasher:
         Returns:
             int: The hash value as an integer.
         """
+        if not isinstance(key, str):
+            raise TypeError(f"Key must be a string, not {type(key).__name__}")
         return int(self._hash_func(key.encode("utf-8")).hexdigest(), 16)
 
     def add_node(self, node_name: str, weight: int = 1) -> None:
@@ -156,7 +157,12 @@ class ConsistentHasher:
         """
         total_vnodes = len(self.ring)
         if total_vnodes == 0:
-            return {"total_nodes": 0, "total_vnodes": 0, "distribution": {}}
+            return {
+                "total_nodes": 0,
+                "total_vnodes": 0,
+                "vnode_counts": {},
+                "coverage_percentage": {}
+            }
 
         vnode_counts: Dict[str, int] = {}
         # Calculate coverage by looking at the distance between vnodes
@@ -172,8 +178,14 @@ class ConsistentHasher:
             node_name = self.vnode_to_node[current_hash]
             vnode_counts[node_name] = vnode_counts.get(node_name, 0) + 1
 
-            # Segment size calculation handles wrapping correctly
-            if current_hash >= prev_hash:
+            # Segment size calculation handles wrapping correctly.
+            # If current_hash == prev_hash, the segment size is 0 because
+            # this vnode doesn't "cover" any additional range of the ring.
+            # In the edge case of exactly one vnode, it covers the whole ring.
+            if total_vnodes == 1:
+                hash_bits = self._hash_func().digest_size * 8
+                segment_size = 2 ** hash_bits
+            elif current_hash > prev_hash:
                 segment_size = current_hash - prev_hash
             else:
                 # Wrap around the full hash space.

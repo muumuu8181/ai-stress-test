@@ -112,4 +112,5 @@ def test_get_stats_empty():
     stats = hasher.get_stats()
     assert stats["total_nodes"] == 0
     assert stats["total_vnodes"] == 0
-    assert stats["distribution"] == {}
+    assert stats["vnode_counts"] == {}
+    assert stats["coverage_percentage"] == {}
