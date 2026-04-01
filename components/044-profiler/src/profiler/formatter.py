@@ -72,15 +72,26 @@ class StatsFormatter:
 
     @classmethod
     def to_flamegraph(cls, result: ProfilerResult) -> str:
-        """Format results as a text-based flame graph (folded stack format)."""
+        """Format results as a text-based flame graph (folded stack format).
+
+        Uses 'self time' for each entry in the stack trace to avoid double-counting
+        when processed by standard flame graph tools.
+        """
         lines = []
 
         def traverse(node: Dict, prefix: str):
-            stack = f"{prefix};{node['name']}" if prefix else node['name']
-            # duration is in seconds, flamegraph usually expects samples or time in some unit
-            # We use microseconds for integer representation
-            duration_us = int(node.get("duration", 0) * 1_000_000)
-            lines.append(f"{stack} {duration_us}")
+            # Use full_name for uniqueness in the stack representation
+            stack = f"{prefix};{node['full_name']}" if prefix else node['full_name']
+
+            duration_total = node.get("duration", 0)
+            duration_children = sum(c.get("duration", 0) for c in node.get("children", []))
+            # Self-time for this node in the context of the call graph
+            duration_self = max(0, duration_total - duration_children)
+
+            # duration is in seconds, use microseconds for integer representation
+            duration_us = int(duration_self * 1_000_000)
+            if duration_us > 0:
+                lines.append(f"{stack} {duration_us}")
 
             for child in node.get("children", []):
                 traverse(child, stack)

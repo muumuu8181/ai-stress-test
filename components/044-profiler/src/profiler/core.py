@@ -20,6 +20,8 @@ class Profiler:
         self._results: Optional[ProfilerResult] = None
         self._root_frames: List[Dict] = []
         self._current_tree_path: List[Dict] = []
+        self._previous_profile_hook: Optional[Any] = None
+        self._started_tracemalloc = False
 
     def start(self) -> None:
         """Start the profiler."""
@@ -35,18 +37,23 @@ class Profiler:
         if self.track_memory:
             if not tracemalloc.is_tracing():
                 tracemalloc.start()
+                self._started_tracemalloc = True
 
+        self._previous_profile_hook = sys.getprofile()
         sys.setprofile(self._profile_handler)
 
     def stop(self) -> ProfilerResult:
         """Stop the profiler and return the collected results."""
-        sys.setprofile(None)
+        if not self._is_profiling:
+            # Result could still be accessed even if not actively profiling
+            return self._results if self._results else ProfilerResult({}, [])
+
+        sys.setprofile(self._previous_profile_hook)
         self._is_profiling = False
 
-        if self.track_memory and tracemalloc.is_tracing():
-            # Keep tracing active for multiple sessions? Or stop?
-            # Standard practice: we can stop if we are the only one using it.
-            pass
+        if self._started_tracemalloc and tracemalloc.is_tracing():
+            tracemalloc.stop()
+            self._started_tracemalloc = False
 
         self._results = ProfilerResult(
             function_stats=self.function_stats,
@@ -66,6 +73,11 @@ class Profiler:
         return self.function_stats[key]
 
     def _profile_handler(self, frame: FrameType, event: str, arg: Any) -> None:
+        # Ignore calls to Profiler's own stop and __exit__ to avoid teardown pollution
+        code = frame.f_code
+        if code.co_name in ("stop", "__exit__") and "profiler/core.py" in code.co_filename:
+            return
+
         if event == "call":
             self._handle_call(frame)
         elif event == "return":
@@ -142,10 +154,25 @@ class Profiler:
 
     @staticmethod
     def decorate(func: Callable) -> Callable:
-        """Decorator to profile a specific function call and print results."""
+        """Decorator to profile a specific function call and print results.
+
+        Handles nested @Profile calls by ensuring a new Profiler session is only
+        started if sys.getprofile() is not already this class's handler.
+        """
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             from .formatter import StatsFormatter
+
+            # Check if we are already profiling with this type of handler
+            current_hook = sys.getprofile()
+            is_nested = (current_hook is not None and
+                         hasattr(current_hook, "__self__") and
+                         isinstance(current_hook.__self__, Profiler))
+
+            if is_nested:
+                # Already profiling, just execute the function
+                return func(*args, **kwargs)
+
             p = Profiler()
             with p:
                 result = func(*args, **kwargs)
