@@ -71,11 +71,18 @@ class BaseLexer:
         Longest match is preferred. If lengths are equal, higher priority is preferred.
         If priority is also equal, the first added rule is preferred.
         """
+        # Ensure pattern does not match empty string to avoid infinite loop
+        compiled = re.compile(pattern, re.DOTALL | re.UNICODE)
+        if compiled.match(""):
+            raise ValueError(f"Rule {name!r} pattern {pattern!r} matches empty string, which is not allowed.")
         self.rules.append(LexerRule(name, pattern, action, priority))
 
     def add_skip_rule(self, pattern: str) -> None:
         """Adds a pattern to skip (e.g., whitespace, comments)."""
-        self.skip_rules.append(re.compile(pattern, re.DOTALL | re.UNICODE))
+        compiled = re.compile(pattern, re.DOTALL | re.UNICODE)
+        if compiled.match(""):
+            raise ValueError(f"Skip pattern {pattern!r} matches empty string, which is not allowed.")
+        self.skip_rules.append(compiled)
 
     def tokenize(self) -> Iterator[Token]:
         """Iterates over the input text and yields tokens."""
@@ -84,7 +91,7 @@ class BaseLexer:
             skipped = False
             for skip_pattern in self.skip_rules:
                 match = skip_pattern.match(self.text, self.pos)
-                if match:
+                if match and match.end() > self.pos:
                     self._advance(match.end() - self.pos)
                     skipped = True
                     break
@@ -103,7 +110,7 @@ class BaseLexer:
 
             for rule in self.rules:
                 match = rule.pattern.match(self.text, self.pos)
-                if match:
+                if match and match.end() > self.pos:
                     match_len = len(match.group(0))
                     if (best_match is None or
                         match_len > best_match_len or

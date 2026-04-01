@@ -74,17 +74,23 @@ class LexerGenerator:
                     self.errors: List[LexerError] = []
 
                 def add_rule(self, name: str, pattern: str, action: Optional[Callable[['BaseLexer', Token], Optional[Token]]] = None, priority: int = 0) -> None:
+                    compiled = re.compile(pattern, re.DOTALL | re.UNICODE)
+                    if compiled.match(""):
+                        raise ValueError(f"Rule {name!r} matches empty string")
                     self.rules.append(LexerRule(name, pattern, action, priority))
 
                 def add_skip_rule(self, pattern: str) -> None:
-                    self.skip_rules.append(re.compile(pattern, re.DOTALL | re.UNICODE))
+                    compiled = re.compile(pattern, re.DOTALL | re.UNICODE)
+                    if compiled.match(""):
+                        raise ValueError(f"Skip pattern {pattern!r} matches empty string")
+                    self.skip_rules.append(compiled)
 
                 def tokenize(self) -> Iterator[Token]:
                     while self.pos < len(self.text):
                         skipped = False
                         for skip_pattern in self.skip_rules:
                             match = skip_pattern.match(self.text, self.pos)
-                            if match:
+                            if match and match.end() > self.pos:
                                 self._advance(match.end() - self.pos)
                                 skipped = True
                                 break
@@ -98,7 +104,7 @@ class LexerGenerator:
 
                         for rule in self.rules:
                             match = rule.pattern.match(self.text, self.pos)
-                            if match:
+                            if match and match.end() > self.pos:
                                 match_len = len(match.group(0))
                                 if (best_match is None or
                                     match_len > best_match_len or

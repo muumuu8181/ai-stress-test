@@ -32,15 +32,13 @@ class DSLParser:
             # Note: This is a simple strip. If /pattern/ contains #, it might fail.
             # But according to our DSL, /pattern/ is delimited by /.
             if '#' in line:
-                # Only strip if # is not inside //
-                parts = line.split('/')
-                if len(parts) >= 3:
-                    # Line looks like: PREFIX /PATTERN/ SUFFIX
-                    suffix = parts[2]
-                    if '#' in suffix:
-                        parts[2] = suffix.split('#')[0].rstrip()
-                        line = '/'.join(parts)
-                elif '#' in line:
+                # Find the last slash to avoid stripping # inside a regex /.../
+                last_slash = line.rfind('/')
+                if last_slash != -1:
+                    comment_start = line.find('#', last_slash)
+                    if comment_start != -1:
+                        line = line[:comment_start].rstrip()
+                else:
                     line = line.split('#')[0].rstrip()
 
             if not line:
