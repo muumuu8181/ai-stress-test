@@ -24,22 +24,27 @@ class DSLParser:
         lines = dsl_text.splitlines()
 
         for i, line in enumerate(lines, 1):
-            line = line.strip()
+            original_line = line.strip()
+            line = original_line
             if not line:
                 continue
 
             # Strip trailing comments
-            # Note: This is a simple strip. If /pattern/ contains #, it might fail.
-            # But according to our DSL, /pattern/ is delimited by /.
-            if '#' in line:
-                # Find the last slash to avoid stripping # inside a regex /.../
-                last_slash = line.rfind('/')
-                if last_slash != -1:
-                    comment_start = line.find('#', last_slash)
-                    if comment_start != -1:
-                        line = line[:comment_start].rstrip()
-                else:
-                    line = line.split('#')[0].rstrip()
+            # Strategy: look for '#' outside of '/.../'
+            # We assume '/' are only used for regex delimiters and they are balanced
+            in_regex = False
+            comment_start = -1
+            for idx, char in enumerate(line):
+                if char == '/':
+                    # Check if it's escaped (simple check)
+                    if idx == 0 or line[idx-1] != '\\':
+                        in_regex = not in_regex
+                elif char == '#' and not in_regex:
+                    comment_start = idx
+                    break
+
+            if comment_start != -1:
+                line = line[:comment_start].rstrip()
 
             if not line:
                 continue

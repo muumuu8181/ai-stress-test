@@ -47,7 +47,7 @@ class LexerRule:
     """Represents a rule for matching tokens."""
     def __init__(self, name: str, pattern: str, action: Optional[Callable[['BaseLexer', Token], Optional[Token]]] = None, priority: int = 0):
         self.name = name
-        self.pattern = re.compile(pattern, re.DOTALL | re.UNICODE)
+        self.pattern = re.compile(pattern, re.UNICODE)
         self.action = action
         self.priority = priority
 
@@ -72,14 +72,14 @@ class BaseLexer:
         If priority is also equal, the first added rule is preferred.
         """
         # Ensure pattern does not match empty string to avoid infinite loop
-        compiled = re.compile(pattern, re.DOTALL | re.UNICODE)
+        compiled = re.compile(pattern, re.UNICODE)
         if compiled.match(""):
             raise ValueError(f"Rule {name!r} pattern {pattern!r} matches empty string, which is not allowed.")
         self.rules.append(LexerRule(name, pattern, action, priority))
 
     def add_skip_rule(self, pattern: str) -> None:
         """Adds a pattern to skip (e.g., whitespace, comments)."""
-        compiled = re.compile(pattern, re.DOTALL | re.UNICODE)
+        compiled = re.compile(pattern, re.UNICODE)
         if compiled.match(""):
             raise ValueError(f"Skip pattern {pattern!r} matches empty string, which is not allowed.")
         self.skip_rules.append(compiled)

@@ -27,10 +27,6 @@ class LexerGenerator:
     def generate(self, class_name: str = 'Lexer') -> str:
         """Generates the Python code for a self-contained lexer class."""
 
-        # We need the core classes to be present in the generated code
-        # Alternatively, we can import them, but the requirement was "standalone" or "from DSL to Python code".
-        # Let's include the core logic in the generated file to make it more self-contained.
-
         core_code = textwrap.dedent("""
             import re
             from typing import List, Tuple, Callable, Optional, Iterator, Any, Dict, Union
@@ -58,7 +54,7 @@ class LexerGenerator:
                 \"\"\"Represents a rule for matching tokens.\"\"\"
                 def __init__(self, name: str, pattern: str, action: Optional[Callable[['BaseLexer', Token], Optional[Token]]] = None, priority: int = 0):
                     self.name = name
-                    self.pattern = re.compile(pattern, re.DOTALL | re.UNICODE)
+                    self.pattern = re.compile(pattern, re.UNICODE)
                     self.action = action
                     self.priority = priority
 
@@ -74,13 +70,13 @@ class LexerGenerator:
                     self.errors: List[LexerError] = []
 
                 def add_rule(self, name: str, pattern: str, action: Optional[Callable[['BaseLexer', Token], Optional[Token]]] = None, priority: int = 0) -> None:
-                    compiled = re.compile(pattern, re.DOTALL | re.UNICODE)
+                    compiled = re.compile(pattern, re.UNICODE)
                     if compiled.match(""):
                         raise ValueError(f"Rule {name!r} matches empty string")
                     self.rules.append(LexerRule(name, pattern, action, priority))
 
                 def add_skip_rule(self, pattern: str) -> None:
-                    compiled = re.compile(pattern, re.DOTALL | re.UNICODE)
+                    compiled = re.compile(pattern, re.UNICODE)
                     if compiled.match(""):
                         raise ValueError(f"Skip pattern {pattern!r} matches empty string")
                     self.skip_rules.append(compiled)
@@ -147,12 +143,10 @@ class LexerGenerator:
         class_definition += "        super().__init__(text)\n"
 
         for pattern in self.definition.skips:
-            # We use r'' for patterns, so we only need to escape single quotes
-            escaped_pattern = pattern.replace("'", "\\'")
-            class_definition += f"        self.add_skip_rule(r'{escaped_pattern}')\n"
+            # Using repr() for safe string literals
+            class_definition += f"        self.add_skip_rule({repr(pattern)})\n"
 
         for name, pattern, priority in self.definition.tokens:
-            escaped_pattern = pattern.replace("'", "\\'")
-            class_definition += f"        self.add_rule('{name}', r'{escaped_pattern}', action=getattr(self, 'action_{name}', None), priority={priority})\n"
+            class_definition += f"        self.add_rule('{name}', {repr(pattern)}, action=getattr(self, 'action_{name}', None), priority={priority})\n"
 
         return core_code + "\n" + class_definition
