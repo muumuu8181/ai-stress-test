@@ -148,8 +148,8 @@ def test_empty_profiling():
     with p:
         pass
     results = p._results
-    for key in results.function_stats:
-        assert "__exit__" in key or "stop" in key
+    # The statistics should be empty now that internal frames are filtered
+    assert len(results.function_stats) == 0
 
 def test_profiler_idempotent_start():
     p = Profiler()
