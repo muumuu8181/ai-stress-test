@@ -256,3 +256,26 @@ def test_once_async():
     asyncio.run(emitter.emit_async('test', 2))
 
     assert called == [1]
+
+def test_once_async_race():
+    emitter = EventEmitter()
+    called = []
+
+    async def async_listener():
+        await asyncio.sleep(0.01)
+        called.append(True)
+
+    emitter.once('test', async_listener)
+
+    # Emit twice in the same event loop turn (using a small helper)
+    async def run_race():
+        # Both calls to emit_async should be started, but the listener
+        # should only be added to tasks once because it removes itself
+        # synchronously when called.
+        await asyncio.gather(
+            emitter.emit_async('test'),
+            emitter.emit_async('test')
+        )
+
+    asyncio.run(run_race())
+    assert len(called) == 1

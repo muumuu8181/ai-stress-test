@@ -52,14 +52,10 @@ class EventEmitter:
         Returns:
             The EventEmitter instance.
         """
-        if asyncio.iscoroutinefunction(listener):
-            async def wrapper(*args, **kwargs):
-                self.off(event, wrapper)
-                return await listener(*args, **kwargs)
-        else:
-            def wrapper(*args, **kwargs):
-                self.off(event, wrapper)
-                return listener(*args, **kwargs)
+        def wrapper(*args, **kwargs):
+            # Synchronously remove the wrapper to avoid race conditions.
+            self.off(event, wrapper)
+            return listener(*args, **kwargs)
 
         wrapper._original_listener = listener
         return self.on(event, wrapper)
@@ -205,11 +201,10 @@ class EventEmitter:
 
         for listener in listeners:
             try:
-                if asyncio.iscoroutinefunction(listener):
+                result = listener(*args, **kwargs)
+                if asyncio.iscoroutine(result):
                     # We can't await here since emit is sync, but we can schedule it
-                    asyncio.create_task(listener(*args, **kwargs))
-                else:
-                    listener(*args, **kwargs)
+                    asyncio.create_task(result)
             except Exception as e:
                 if event == 'error':
                     raise e
@@ -250,10 +245,9 @@ class EventEmitter:
         tasks = []
         for listener in listeners:
             try:
-                if asyncio.iscoroutinefunction(listener):
-                    tasks.append(listener(*args, **kwargs))
-                else:
-                    listener(*args, **kwargs)
+                result = listener(*args, **kwargs)
+                if asyncio.iscoroutine(result):
+                    tasks.append(result)
             except Exception as e:
                 if event == 'error':
                     raise e
