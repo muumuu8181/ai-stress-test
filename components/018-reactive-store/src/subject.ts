@@ -7,16 +7,17 @@ export class Subject<T> extends Observable<T> implements Observer<T> {
   protected observers: Array<Observer<T>> = [];
   protected isClosed = false;
 
-  constructor() {
-    super((observer) => {
-      this.observers.push(observer);
-      return () => {
-        const index = this.observers.indexOf(observer);
-        if (index > -1) {
-          this.observers.splice(index, 1);
-        }
-      };
-    });
+  /**
+   * Internal subscription logic for Subject.
+   */
+  protected override _subscribe(observer: Observer<T>): TeardownLogic {
+    this.observers.push(observer);
+    return () => {
+      const index = this.observers.indexOf(observer);
+      if (index > -1) {
+        this.observers.splice(index, 1);
+      }
+    };
   }
 
   /**
@@ -60,29 +61,17 @@ export class BehaviorSubject<T> extends Subject<T> {
   constructor(initialValue: T) {
     super();
     this._currentValue = initialValue;
-
-    // Override the constructor-level _subscribe by adding a special logic.
-    // However, super() already defined _subscribe. Let's adjust BehaviorSubject to emit current value on subscribe.
   }
 
   /**
-   * Subscribes an observer and immediately emits the current value.
+   * Internal subscription logic for BehaviorSubject.
    */
-  subscribe(observerOrNext: Partial<Observer<T>> | ((value: T) => void)): Subscription {
-    const subscription = super.subscribe(observerOrNext);
-
-    let observer: Partial<Observer<T>>;
-    if (typeof observerOrNext === 'function') {
-      observer = { next: observerOrNext };
-    } else {
-      observer = observerOrNext;
-    }
-
+  protected override _subscribe(observer: Observer<T>): TeardownLogic {
+    const teardown = super._subscribe(observer);
     if (!this.isClosed) {
-      observer.next?.(this._currentValue);
+      observer.next(this._currentValue);
     }
-
-    return subscription;
+    return teardown;
   }
 
   /**
@@ -112,21 +101,12 @@ export class ReplaySubject<T> extends Subject<T> {
   }
 
   /**
-   * Subscribes an observer and emits cached values.
+   * Internal subscription logic for ReplaySubject.
    */
-  subscribe(observerOrNext: Partial<Observer<T>> | ((value: T) => void)): Subscription {
-    const subscription = super.subscribe(observerOrNext);
-
-    let observer: Partial<Observer<T>>;
-    if (typeof observerOrNext === 'function') {
-      observer = { next: observerOrNext };
-    } else {
-      observer = observerOrNext;
-    }
-
-    this._buffer.forEach((v) => observer.next?.(v));
-
-    return subscription;
+  protected override _subscribe(observer: Observer<T>): TeardownLogic {
+    const teardown = super._subscribe(observer);
+    this._buffer.forEach((v) => observer.next(v));
+    return teardown;
   }
 
   /**

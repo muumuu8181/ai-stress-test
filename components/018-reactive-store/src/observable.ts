@@ -31,12 +31,25 @@ export type OperatorFunction<T, R> = (source: Observable<T>) => Observable<R>;
  * Core Observable class implementing the RxJS-like pattern.
  */
 export class Observable<T> {
+  private _subscriber?: (observer: Observer<T>) => TeardownLogic;
+
   /**
    * @param subscribe Function that defines the subscription logic.
    */
   constructor(
-    private _subscribe: (observer: Observer<T>) => TeardownLogic
-  ) {}
+    subscribe?: (observer: Observer<T>) => TeardownLogic
+  ) {
+    if (subscribe) {
+      this._subscriber = subscribe;
+    }
+  }
+
+  /**
+   * Internal subscription logic that can be overridden by subclasses.
+   */
+  protected _subscribe(observer: Observer<T>): TeardownLogic {
+    return this._subscriber?.(observer);
+  }
 
   /**
    * Subscribes an observer to this Observable.

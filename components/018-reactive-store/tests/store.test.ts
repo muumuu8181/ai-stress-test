@@ -59,6 +59,13 @@ describe('Store', () => {
 
     store.restoreState(1);
     expect(store.getState()).toEqual({ count: 1 });
+    expect(store.getCurrentIndex()).toBe(1);
+
+    // Dispatching new action after restoration should truncate history
+    store.dispatch({ type: 'increment' });
+    expect(store.getState()).toEqual({ count: 2 });
+    expect(store.getHistory()).toEqual([{ count: 0 }, { count: 1 }, { count: 2 }]);
+    expect(store.getCurrentIndex()).toBe(2);
   });
 });
 

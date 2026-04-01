@@ -27,6 +27,7 @@ export class Store<S> {
   private _reducer: Reducer<S>;
   private _dispatch: (action: Action) => void;
   private _history: S[] = [];
+  private _currentIndex: number = 0;
 
   /**
    * @param reducer The reducer function.
@@ -40,16 +41,22 @@ export class Store<S> {
 
     // Basic dispatch
     const basicDispatch = (action: Action) => {
+      // Truncate history if we were in the past
+      if (this._currentIndex < this._history.length - 1) {
+        this._history = this._history.slice(0, this._currentIndex + 1);
+      }
+
       const currentState = this._state$.getValue();
       const newState = this._reducer(currentState, action);
       if (newState !== currentState) {
         this._history.push(newState);
+        this._currentIndex = this._history.length - 1;
         this._state$.next(newState);
       }
     };
 
     // Chain middlewares
-    this._dispatch = middlewares
+    this._dispatch = [...middlewares]
       .reverse()
       .reduce((next, middleware) => middleware(this)(next), basicDispatch as (action: Action) => void);
   }
@@ -88,8 +95,16 @@ export class Store<S> {
    */
   restoreState(index: number): void {
     if (index >= 0 && index < this._history.length) {
+      this._currentIndex = index;
       const state = this._history[index];
       this._state$.next(state);
     }
+  }
+
+  /**
+   * Returns the current history index.
+   */
+  getCurrentIndex(): number {
+    return this._currentIndex;
   }
 }
