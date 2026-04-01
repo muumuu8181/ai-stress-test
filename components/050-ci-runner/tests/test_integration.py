@@ -57,7 +57,9 @@ stages:
         assert len(report['stages']) == 2
         assert report['stages'][0]['name'] == 'test'
         assert len(report['stages'][0]['jobs']) == 2
-        assert "running tests for test_project" in report['stages'][0]['jobs'][0]['logs']
+        # Use search to find the correct job because jobs are executed in parallel and order in report depends on completion time
+        unit_test_job = next(j for j in report['stages'][0]['jobs'] if j['name'] == 'unit_test')
+        assert "running tests for test_project" in unit_test_job['logs']
 
     finally:
         if os.path.exists(tf_path):

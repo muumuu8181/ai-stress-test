@@ -54,7 +54,9 @@ class Executor:
 
         # Prepare environment for subprocess
         job_env = os.environ.copy()
-        job_env.update(current_env)
+        # Normalize environment values to strings
+        for k, v in current_env.items():
+            job_env[k] = str(v)
 
         # Substitute variables in command
         command = self._substitute_vars(job.run, current_env)
@@ -104,11 +106,13 @@ class Executor:
 
         # Check artifacts
         artifacts_found = []
-        for art_path in job.artifacts:
-            if os.path.exists(art_path):
-                artifacts_found.append(art_path)
+        import glob
+        for art_pattern in job.artifacts:
+            matches = glob.glob(art_pattern)
+            if matches:
+                artifacts_found.extend(matches)
             else:
-                logs.append(f"Warning: Artifact not found: {art_path}\n")
+                logs.append(f"Warning: Artifact not found: {art_pattern}\n")
 
         return JobResult(job, status, "".join(logs), duration, artifacts_found)
 
@@ -118,8 +122,10 @@ class Executor:
             var_name = match.group(1).strip()
             if var_name.startswith('env.'):
                 env_key = var_name[4:]
-                return job_env.get(env_key, os.environ.get(env_key, ''))
-            return self.variables.get(var_name, '')
+                val = job_env.get(env_key, os.environ.get(env_key, ''))
+            else:
+                val = self.variables.get(var_name, '')
+            return str(val) if val is not None else ''
         return re.sub(pattern, replace_var, text)
 
     def run_pipeline(self) -> PipelineResult:
